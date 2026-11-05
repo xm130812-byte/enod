@@ -2,6 +2,8 @@ export type DocStatus = 'unread' | 'reading' | 'done';
 export type AnnotationColor = 'yellow' | 'green' | 'blue' | 'pink';
 export type ThemeName = 'light' | 'dark' | 'sepia' | 'system';
 export type FontFamily = 'serif' | 'sans' | 'mono';
+export type AccentName = 'blue' | 'teal' | 'green' | 'red' | 'amber' | 'graphite';
+export type Density = 'comfortable' | 'compact';
 
 export interface DocSummary {
   id: string;
@@ -79,6 +81,8 @@ export interface DocPayload extends DocSummary {
 export interface AppConfig {
   libraryRoot: string | null;
   theme: ThemeName;
+  accent: AccentName;
+  density: Density;
   fontSize: number;
   lineHeight: number;
   measureCh: number;

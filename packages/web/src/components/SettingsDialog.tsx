@@ -24,6 +24,20 @@ const FONTS: { key: FontFamily; label: string; sample: string }[] = [
   { key: 'mono', label: '等宽', sample: 'Aa 码' },
 ];
 
+const ACCENTS: { key: AppConfig['accent']; label: string; color: string }[] = [
+  { key: 'blue', label: '深蓝', color: '#4176e6' },
+  { key: 'teal', label: '青', color: '#0e7c7b' },
+  { key: 'green', label: '绿', color: '#3e7d4f' },
+  { key: 'red', label: '朱', color: '#c24a38' },
+  { key: 'amber', label: '琥珀', color: '#a9691b' },
+  { key: 'graphite', label: '石墨', color: '#4a5563' },
+];
+
+const DENSITIES: { key: AppConfig['density']; label: string; hint: string }[] = [
+  { key: 'comfortable', label: '舒适', hint: '卡片显示 3 行摘要' },
+  { key: 'compact', label: '紧凑', hint: '卡片显示 2 行摘要，一屏更多' },
+];
+
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const { config, info, applyConfig, refresh } = useLibrary();
   const { toast } = useToast();
@@ -49,6 +63,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     const timer = window.setTimeout(() => {
       void applyConfig({
         theme: form.theme,
+        accent: form.accent,
+        density: form.density,
         fontFamily: form.fontFamily,
         fontSize: form.fontSize,
         lineHeight: form.lineHeight,
@@ -164,6 +180,38 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </div>
           </div>
 
+          <div className="field">
+            <span>强调色</span>
+            <div className="accent-row">
+              {ACCENTS.map((accent) => (
+                <button
+                  key={accent.key}
+                  className={`accent-swatch ${form.accent === accent.key ? 'active' : ''}`}
+                  style={{ background: accent.color }}
+                  title={accent.label}
+                  aria-label={accent.label}
+                  onClick={() => patch({ accent: accent.key })}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="field">
+            <span>界面密度</span>
+            <div className="segmented">
+              {DENSITIES.map((density) => (
+                <button
+                  key={density.key}
+                  className={form.density === density.key ? 'active' : ''}
+                  onClick={() => patch({ density: density.key })}
+                  title={density.hint}
+                >
+                  {density.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="field range">
             <span>
               字号 <em>{form.fontSize}px</em>
@@ -180,7 +228,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
           <label className="field range">
             <span>
-              行高 <em>{form.lineHeight.toFixed(1)}</em>
+              行高 <em>{form.lineHeight.toFixed(2)}</em>
             </span>
             <input
               type="range"
@@ -207,7 +255,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           </label>
 
           <p className="settings-preview" style={{ maxWidth: `${form.measureCh}ch` }}>
-            中文排版的舒适区：一行 68 个字符左右，行高 1.8。字号的绝对值小于它和行宽的比例。
+            中文排版的舒适区：一行 60–75 个字符，行高 1.6–1.8。字号的绝对值小于它和行宽的比例。
           </p>
         </section>
 

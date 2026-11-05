@@ -1,5 +1,6 @@
 /* ============================================================
-   阅读视图排版
+   阅读视图排版 —— 对齐 DSH Markdown 规范
+   参考：--dsw-font-markdown-* / ._markdown_* 规则
    ============================================================ */
 
 .article {
@@ -8,15 +9,21 @@
   font-family: var(--font-body);
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);
-  color: var(--ink);
-  overflow-wrap: break-word;
+  color: var(--fg);
+  overflow-wrap: anywhere;
   letter-spacing: 0.01em;
-  font-variant-numeric: proportional-nums;
 }
 
-.article > :first-child {
-  margin-top: 0;
+.article > :first-child,
+.article p:first-child {
+  margin-top: 0 !important;
 }
+.article > :last-child,
+.article p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* ------------------------------------------------------------ 标题 */
 
 .article h1,
 .article h2,
@@ -24,89 +31,112 @@
 .article h4,
 .article h5,
 .article h6 {
-  font-family: var(--font-body);
-  font-weight: 650;
+  color: var(--fg);
   line-height: 1.35;
-  color: var(--ink);
-  margin: 2em 0 0.65em;
-  scroll-margin-top: 24px;
+  scroll-margin-top: 20px;
+  font-family: var(--font-body);
   text-wrap: balance;
 }
 .article h1 {
-  font-size: 1.75em;
-  margin-top: 0.4em;
-  letter-spacing: -0.01em;
+  font-size: 1.5em;
+  font-weight: 700;
+  margin: 2em 0 0.9em;
+  letter-spacing: -0.005em;
 }
 .article h2 {
-  font-size: 1.38em;
-  padding-bottom: 0.25em;
-  border-bottom: 1px solid var(--line);
+  font-size: 1.32em;
+  font-weight: 700;
+  margin: 2em 0 0.8em;
 }
 .article h3 {
   font-size: 1.16em;
+  font-weight: 700;
+  margin: 1.8em 0 0.7em;
 }
 .article h4 {
-  font-size: 1.02em;
+  font-size: 1em;
+  font-weight: 600;
+  margin: 1.4em 0 0.6em;
 }
 .article h5,
 .article h6 {
-  font-size: 0.95em;
-  color: var(--ink-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.94em;
+  font-weight: 600;
+  margin: 1.4em 0 0.6em;
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
 }
+.article h1:first-child,
+.article h2:first-child {
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------ 正文 */
 
 .article p {
-  margin: 0 0 1.05em;
-}
-
-.article a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  text-decoration-color: color-mix(in oklab, var(--accent) 40%, transparent);
-  transition: text-decoration-color 0.15s ease;
-}
-.article a:hover {
-  text-decoration-color: var(--accent);
-}
-
-.article a.wiki-link {
-  text-decoration-style: dotted;
-  background: color-mix(in oklab, var(--accent) 7%, transparent);
-  border-radius: 3px;
-  padding: 0 2px;
-}
-.article a.wiki-broken {
-  color: var(--danger);
-  text-decoration-style: wavy;
-  text-decoration-color: color-mix(in oklab, var(--danger) 55%, transparent);
-  background: transparent;
-  cursor: help;
+  margin: 1em 0;
 }
 
 .article strong {
-  font-weight: 680;
+  font-weight: 600;
 }
 .article em {
   font-style: italic;
 }
 .article del {
-  color: var(--ink-muted);
+  color: var(--fg-3);
 }
+
+.article a {
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
+  transition: text-decoration-color 0.12s ease;
+}
+.article a:hover,
+.article a:focus-visible {
+  text-decoration: underline dotted var(--accent);
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.article a.wiki-link {
+  text-decoration: underline dotted color-mix(in oklab, var(--accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+.article a.wiki-link:hover {
+  text-decoration-color: var(--accent);
+}
+.article a.wiki-broken {
+  color: var(--danger);
+  text-decoration: underline wavy color-mix(in oklab, var(--danger) 60%, transparent);
+  cursor: help;
+}
+
+/* ------------------------------------------------------------ 列表 */
 
 .article ul,
 .article ol {
-  margin: 0 0 1.05em;
-  padding-left: 1.4em;
+  margin: 1em 0;
+  padding-left: 18px;
 }
 .article li {
-  margin: 0.3em 0;
+  margin: 0.25em 0;
+}
+.article li:not(:first-child) {
+  margin-top: 6px;
 }
 .article li > p {
-  margin: 0.3em 0;
+  margin: 0.4em 0;
 }
+.article li > ul,
+.article li > ol {
+  margin-top: 4px;
+}
+.article li::marker {
+  color: var(--fg-3);
+}
+
 .article ul.contains-task-list,
 .article li.task-list-item {
   list-style: none;
@@ -120,12 +150,13 @@
   transform: translateY(1px);
 }
 
+/* ------------------------------------------------------------ 引用 / 分割线 */
+
 .article blockquote {
-  margin: 1.4em 0;
-  padding: 0.2em 0 0.2em 1.1em;
-  border-left: 3px solid var(--line-strong);
-  color: var(--ink-soft);
-  font-style: normal;
+  margin: 1em 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--fg-2);
 }
 .article blockquote > :last-child {
   margin-bottom: 0;
@@ -133,35 +164,39 @@
 
 .article hr {
   border: none;
-  border-top: 1px solid var(--line);
-  margin: 2.2em 0;
+  height: 1px;
+  background: var(--line);
+  margin: 2em 0;
 }
+
+/* ------------------------------------------------------------ 代码 */
 
 .article code {
   font-family: var(--font-mono);
-  font-size: 0.85em;
+  font-size: 0.875em;
   background: var(--code-bg);
-  border-radius: 4px;
-  padding: 0.15em 0.38em;
-  border: 1px solid color-mix(in oklab, var(--line) 70%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0 4px;
 }
 
 .article pre.code-block {
   position: relative;
-  margin: 1.4em 0;
-  padding: 14px 16px;
-  background: var(--code-bg);
+  margin: 1em 0;
+  padding: 12px 14px;
+  background: var(--code-block-bg);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 2px;
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 0.78em;
-  line-height: 1.62;
+  line-height: 1.6;
   tab-size: 2;
 }
 .article pre.code-block code {
   background: none;
   border: none;
+  border-radius: 0;
   padding: 0;
   font-size: 1em;
   display: block;
@@ -169,18 +204,18 @@
 }
 .article pre.code-block .line {
   display: block;
-  padding-left: 2.4em;
+  padding-left: 2.2em;
   position: relative;
-  min-height: 1.62em;
+  min-height: 1.6em;
 }
 .article pre.code-block .line::before {
   counter-increment: line;
   content: counter(line);
   position: absolute;
   left: 0;
-  width: 1.8em;
+  width: 1.6em;
   text-align: right;
-  color: var(--ink-muted);
+  color: var(--fg-3);
   opacity: 0.55;
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -194,31 +229,33 @@
 
 .article pre.code-block .code-copy {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   opacity: 0;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   background: var(--bg-elev);
-  color: var(--ink-soft);
-  font-size: 11px;
+  color: var(--fg-2);
+  font-size: 10.5px;
   font-family: var(--font-sans);
-  border-radius: 6px;
-  padding: 3px 8px;
-  transition: opacity 0.15s ease;
+  border-radius: 2px;
+  padding: 2px 7px;
+  transition: opacity 0.12s ease, border-color 0.12s ease;
 }
 .article pre.code-block:hover .code-copy {
   opacity: 1;
 }
 .article pre.code-block .code-copy:hover {
-  color: var(--ink);
-  border-color: var(--accent);
+  border-color: var(--fg-3);
+  color: var(--fg);
 }
 
+/* ------------------------------------------------------------ 表格（DSH 风格） */
+
 .article .table-wrap {
-  margin: 1.5em 0;
+  margin: 1.2em 0;
   overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: none;
+  border-radius: 0;
 }
 .article table {
   border-collapse: collapse;
@@ -228,57 +265,71 @@
 }
 .article th,
 .article td {
-  border-bottom: 1px solid var(--line);
-  padding: 0.55em 0.9em;
+  padding: 9px 14px;
   text-align: left;
   vertical-align: top;
+  border: none;
+  border-bottom: 1px solid var(--line);
 }
 .article th {
-  background: var(--bg-soft);
+  background: transparent;
   font-weight: 600;
+  border-bottom-color: var(--line-strong);
   white-space: nowrap;
 }
-.article tr:last-child td {
-  border-bottom: none;
+.article th:first-child,
+.article td:first-child {
+  padding-left: 0;
 }
+.article th:last-child,
+.article td:last-child {
+  padding-right: 0;
+}
+.article table code {
+  font-size: 0.92em;
+}
+
+/* ------------------------------------------------------------ 图片 / 公式 */
 
 .article img {
   max-width: 100%;
   height: auto;
-  border-radius: 8px;
+  border-radius: 2px;
   display: block;
-  margin: 1.4em auto;
+  margin: 1.2em auto;
   cursor: zoom-in;
   background: var(--bg-soft);
 }
 .article img.md-image {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
 }
 
 .article .math {
   font-family: var(--font-mono);
 }
 .article .math-block {
-  margin: 1.4em 0;
+  margin: 1.2em 0;
   overflow-x: auto;
   text-align: center;
   font-size: 0.95em;
 }
 .article .katex-display {
-  margin: 1.2em 0;
+  margin: 1em 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 .article .katex {
-  font-size: 1.03em;
+  font-size: 1.02em;
 }
 
+/* ------------------------------------------------------------ 脚注 */
+
 .article .footnotes {
-  margin-top: 3em;
-  padding-top: 1em;
+  margin-top: 2.4em;
+  padding-top: 0.9em;
   border-top: 1px solid var(--line);
   font-size: 0.82em;
-  color: var(--ink-soft);
+  color: var(--fg-2);
 }
 .article .footnotes-sep {
   display: none;
@@ -295,23 +346,23 @@
 .article .footnote-backref {
   text-decoration: none;
   margin-left: 4px;
-  color: var(--ink-muted);
+  color: var(--fg-3);
 }
 
-/* ------------------------------------------------ 批注高亮 */
+/* ------------------------------------------------------------ 批注 */
 
 mark.ann {
-  background: color-mix(in oklab, var(--ann-color, var(--yellow)) 46%, transparent);
+  background: color-mix(in oklab, var(--ann-color, var(--yellow)) 42%, transparent);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0;
   padding: 1px 0;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background-color 0.12s ease;
 }
 mark.ann:hover {
-  background: color-mix(in oklab, var(--ann-color, var(--yellow)) 66%, transparent);
+  background: color-mix(in oklab, var(--ann-color, var(--yellow)) 58%, transparent);
 }
 mark.ann-yellow {
   --ann-color: var(--yellow);
@@ -326,29 +377,20 @@ mark.ann-pink {
   --ann-color: var(--pink);
 }
 mark.ann.ann-flash {
-  animation: annFlash 1.3s ease-out;
-}
-@keyframes annFlash {
-  0% {
-    background: color-mix(in oklab, var(--ann-color, var(--yellow)) 85%, transparent);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ann-color, var(--yellow)) 45%, transparent);
-  }
-  100% {
-    background: color-mix(in oklab, var(--ann-color, var(--yellow)) 46%, transparent);
-    box-shadow: 0 0 0 0 transparent;
-  }
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-/* Shiki：保留其配色，背景透明交给主题 */
+/* Shiki：背景交给主题 */
 .article pre.code-block.shiki,
 .article pre.code-block.shiki code,
 .article pre.code-block.shiki span {
   background: transparent !important;
 }
 .article pre.code-block.shiki {
-  background: var(--code-bg);
+  background: var(--code-block-bg);
 }
 
 :root[data-theme='dark'] .article pre.code-block.shiki span {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
 }

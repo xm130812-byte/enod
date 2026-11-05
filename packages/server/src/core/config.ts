@@ -6,10 +6,14 @@ import { defaultLibraryDir } from './paths.ts';
 
 export type ThemeName = 'light' | 'dark' | 'sepia' | 'system';
 export type FontFamily = 'serif' | 'sans' | 'mono';
+export type AccentName = 'blue' | 'teal' | 'green' | 'red' | 'amber' | 'graphite';
+export type Density = 'comfortable' | 'compact';
 
 export interface AppConfig {
   libraryRoot: string | null;
   theme: ThemeName;
+  accent: AccentName;
+  density: Density;
   fontSize: number;
   lineHeight: number;
   measureCh: number;
@@ -24,10 +28,12 @@ export interface AppConfig {
 export const DEFAULT_CONFIG: AppConfig = {
   libraryRoot: null,
   theme: 'system',
+  accent: 'blue',
+  density: 'comfortable',
   fontSize: 18,
-  lineHeight: 1.8,
+  lineHeight: 1.75,
   measureCh: 68,
-  fontFamily: 'serif',
+  fontFamily: 'sans',
   autosave: true,
   versionKeep: 20,
   syncProgress: false,
@@ -98,12 +104,18 @@ function clamp(value: number, [min, max]: [number, number], fallback: number): n
 
 export function sanitizeConfig(input: AppConfig): AppConfig {
   const theme: ThemeName = ['light', 'dark', 'sepia', 'system'].includes(input.theme) ? input.theme : 'system';
-  const fontFamily: FontFamily = ['serif', 'sans', 'mono'].includes(input.fontFamily) ? input.fontFamily : 'serif';
+  const fontFamily: FontFamily = ['serif', 'sans', 'mono'].includes(input.fontFamily) ? input.fontFamily : 'sans';
+  const accent: AccentName = ['blue', 'teal', 'green', 'red', 'amber', 'graphite'].includes(input.accent)
+    ? input.accent
+    : 'blue';
+  const density: Density = input.density === 'compact' ? 'compact' : 'comfortable';
   return {
     libraryRoot: typeof input.libraryRoot === 'string' && input.libraryRoot.trim() ? input.libraryRoot : null,
     theme,
+    accent,
+    density,
     fontSize: clamp(input.fontSize, CONFIG_LIMITS.fontSize, 18),
-    lineHeight: clamp(input.lineHeight, CONFIG_LIMITS.lineHeight, 1.8),
+    lineHeight: clamp(input.lineHeight, CONFIG_LIMITS.lineHeight, 1.75),
     measureCh: clamp(input.measureCh, CONFIG_LIMITS.measureCh, 68),
     fontFamily,
     autosave: input.autosave !== false,

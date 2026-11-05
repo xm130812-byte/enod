@@ -59,8 +59,9 @@ function sortDocs(docs: DocSummary[], sort: SortKey): DocSummary[] {
 }
 
 export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }: ShelfPageProps) {
-  const { docs, tags, info, loading, error, refresh, refreshDocs, progress } = useLibrary();
+  const { docs, tags, info, loading, error, refresh, refreshDocs, progress, config } = useLibrary();
   const { toast } = useToast();
+  const density = config?.density ?? 'comfortable';
   const [status, setStatus] = useState<StatusFilter>('all');
   const [sort, setSort] = useState<SortKey>('recent');
   const [view, setView] = useState<ViewMode>('grid');
@@ -390,6 +391,7 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
           bulkMode={bulkMode}
           selected={selected}
           onToggle={toggleSelect}
+          density={density}
         />
       )}
     </div>
@@ -545,12 +547,14 @@ function VirtualDocGrid({
   bulkMode,
   selected,
   onToggle,
+  density,
 }: {
   docs: DocSummary[];
   onOpenDoc: (id: string) => void;
   bulkMode: boolean;
   selected: Set<string>;
   onToggle: (id: string) => void;
+  density: 'comfortable' | 'compact';
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ cols: 3, viewport: 800, scrollTop: 0 });
@@ -573,7 +577,7 @@ function VirtualDocGrid({
     };
   }, []);
 
-  const rowHeight = 228;
+  const rowHeight = density === 'compact' ? 202 : 228;
   const gap = 18;
   const totalRows = Math.ceil(docs.length / layout.cols);
   const startRow = Math.max(0, Math.floor(layout.scrollTop / rowHeight) - 2);

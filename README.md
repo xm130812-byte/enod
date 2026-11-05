@@ -16,7 +16,7 @@
 | 能力 | 状态 | 说明 |
 |---|---|---|
 | 书架 | ✅ | 状态分组、标签筛选、四种视图（书架 / 列表 / 目录 / 标签）、排序、虚拟滚动、批量改状态 / 打标签 |
-| 阅读器 | ✅ | 排版可调、亮/暗/护眼、目录高亮、沉浸模式、图片灯箱、Shiki 代码高亮 + 行号 + 复制、KaTeX、脚注、任务列表 |
+| 阅读器 | ✅ | DSH 风格排版、TOC 高亮、沉浸模式、图片灯箱、Shiki 代码高亮 + 行号 + 复制、KaTeX、脚注、任务列表；三主题 + 6 强调色 + 两档密度 |
 | 写作 | ✅ | CodeMirror 6 + Live Preview（隐藏标记、标题变大、图片内联、复选框可点）、800ms 自动保存、`Ctrl+S`、冲突检测、粘贴图片 |
 | 批注 | ✅ | 4 色高亮 + 旁注，写回 frontmatter；四级锚点重定位；失效批注单独分组、可重新绑定；导出批注为 Markdown |
 | 双向链接 | ✅ | `[[文档]]`、`[[文档|显示]]`、`[[文档#标题]]`；反链面板、出链、断链标红、悬浮预览、Unlinked Mentions 一键加链 |
@@ -28,13 +28,30 @@
 
 ### 界面
 
-| 阅读 | 写作（Live Preview） |
+| 阅读（亮） | 阅读（暗） |
 |---|---|
-| ![阅读](docs/screenshots/reader.png) | ![写作](docs/screenshots/editor.png) |
+| ![阅读](docs/screenshots/reader.png) | ![阅读暗色](docs/screenshots/dark-reader.png) |
+
+| 书架 | 写作（Live Preview） |
+|---|---|
+| ![书架](docs/screenshots/shelf.png) | ![写作](docs/screenshots/editor.png) |
 
 | 搜索 | 设置 |
 |---|---|
 | ![搜索](docs/screenshots/search.png) | ![设置](docs/screenshots/settings.png) |
+
+### 视觉风格
+
+界面参照 **DSH 内置 Markdown 的设计 token** 重做，不是常见的圆角卡片风：
+
+- **直角**：组件 0 圆角，仅行内代码/图片 2px；没有胶囊按钮。
+- **线而非影**：用 1px / 0.5px 边框与底色分层，全站无投影、无渐变、无毛玻璃。
+- **单一强调色**：默认 DSH 蓝 `#4176e6`，可在设置里换青/绿/朱/琥珀/石墨。
+- **排版即品牌**：标题 700、段落 1em、引用 2px 左边线、表格只有横线（与 DSH Markdown 一致）。
+- **密度可选**：舒适（3 行摘要）/ 紧凑（2 行摘要，卡片 184px）。
+- **暗色**：不是简单反色，按 DSH 的 neutral-bluish 色板重建（`#151517` / `#1b1b1c` / `#7aaaff`）。
+
+完整规范（token 表、组件规则、暗色映射、验收清单）见 [docs/UI-DESIGN.md](docs/UI-DESIGN.md)。
 
 ---
 

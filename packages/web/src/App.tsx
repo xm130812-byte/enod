@@ -54,6 +54,8 @@ function useTheme(config: AppConfig | null): void {
     apply();
     media.addEventListener('change', apply);
     root.dataset.font = config.fontFamily;
+    root.dataset.accent = config.accent;
+    root.dataset.density = config.density;
     root.style.setProperty('--reader-font-size', `${config.fontSize}px`);
     root.style.setProperty('--reader-line-height', String(config.lineHeight));
     root.style.setProperty('--reader-measure', `${config.measureCh}ch`);
