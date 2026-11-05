@@ -98,6 +98,17 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 
 ## 3. 组件规范
 
+### 3.0 两种主视图
+
+| 视图 | 结构 | 说明 |
+|---|---|---|
+| **简单视图（默认）** | 左 258px 文件树（文件夹 + 文档，可展开）｜中：文章 | 无未读/在读/已读导航，无侧栏；目录为 250px 浮层，由顶栏目录按钮打开，点击标题跳转并关闭 |
+| **复杂视图** | 书架（文件夹 / 卡片 / 列表 / 标签）+ 三栏阅读 | 状态筛选、批注、反链、批量操作都在这里 |
+
+- 切换入口：简单视图左下「复杂视图」；书架右上「简单」；阅读器「更多 → 切换到简单视图」。
+- 记忆：`localStorage · mr.app.mode`；简单视图文件树展开状态 `mr.simple.expanded`。
+- 简单视图的阅读区仍支持编辑、划线批注、沉浸模式；只是不显示状态选择与右侧面板。
+
 ### 3.1 顶栏
 - 高 44px，白底，1px 底线；左侧品牌字标 `md-reader`（无渐变色块，仅 1px 方框内一个 `m` 字）。
 - 中间搜索框：0 圆角、1px 边框、`--bg-soft` 底，右侧 `Ctrl K` 键帽。
@@ -150,6 +161,7 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 
 | 项 | 取值 | 存储 |
 |---|---|---|
+| 主视图 | 简单 / 复杂 | `localStorage · mr.app.mode` |
 | 主题 | 亮 / 暗 / 护眼 / 跟随系统 | `config.theme` + `data-theme` |
 | 强调色 | 深蓝 / 青 / 绿 / 朱 / 琥珀 / 石墨 | `config.accent` + `data-accent` |
 | 密度 | 舒适 / 紧凑 | `config.density` + `data-density` |
@@ -177,6 +189,8 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 ## 6. 验收清单
 
 - [x] 全站 0 圆角（除行内代码/图片 2px），无 box-shadow（弹层仅 1px 边框）。
+- [x] 简单视图默认启用：左侧文件树、中间文章、目录浮层，无状态导航。
+- [x] 简单 / 复杂视图切换后保持，文档不丢失。
 - [x] 亮/暗/护眼三套主题下，文字对比度 ≥ 4.5:1。
 - [x] 强调色 6 种切换后，链接、主按钮、选中态同步。
 - [x] compact 密度下书架卡片 184px、正文不受影响。

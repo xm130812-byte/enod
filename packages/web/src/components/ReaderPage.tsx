@@ -30,6 +30,8 @@ interface ReaderPageProps {
   docId: string;
   onBack: () => void;
   onOpenDoc: (id: string) => void;
+  simple?: boolean;
+  onSwitchMode?: () => void;
 }
 
 type PanelTab = 'notes' | 'backlinks' | 'mentions' | 'links';
@@ -43,7 +45,7 @@ const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
 
 const scrollMemory = new Map<string, number>();
 
-export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
+export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchMode }: ReaderPageProps) {
   const { config, info, docs, resolveWiki, refreshDocs, applyConfig } = useLibrary();
   const { toast } = useToast();
 
@@ -61,6 +63,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
   const [panelTab, setPanelTab] = useState<PanelTab>('notes');
   const [panelOpen, setPanelOpen] = useState(true);
+  const [tocOpen, setTocOpen] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
@@ -622,7 +625,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
   const statusLabelText = doc ? statusLabel(doc.status) : '';
   const theme = config?.theme === 'dark' || (config?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-  const focusMode = config?.readerLayout === 'focus';
+  const focusMode = !simple && config?.readerLayout === 'focus';
 
   if (loading) {
     return (
@@ -651,11 +654,13 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
   }
 
   return (
-    <div className={`reader ${immersive ? 'immersive' : ''} ${focusMode ? 'focus-mode' : ''}`}>
+    <div className={`reader ${immersive ? 'immersive' : ''} ${focusMode ? 'focus-mode' : ''} ${simple ? 'simple-view' : ''}`}>
       <header className="reader-head">
-        <button className="icon-btn" onClick={onBack} title="返回书架（Esc）">
-          <Icon name="back" size={19} />
-        </button>
+        {!simple && (
+          <button className="icon-btn" onClick={onBack} title="返回书架（Esc）">
+            <Icon name="back" size={19} />
+          </button>
+        )}
 
         <div className="reader-title">
           <h1 title={doc.title}>{doc.title}</h1>
@@ -681,18 +686,20 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
         <div className="reader-actions">
           {mode === 'read' && (
             <>
-              <select
-                className="select status-select"
-                value={doc.status}
-                onChange={(e) => void changeStatus(e.target.value as DocStatus)}
-                title="阅读状态"
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              {!simple && (
+                <select
+                  className="select status-select"
+                  value={doc.status}
+                  onChange={(e) => void changeStatus(e.target.value as DocStatus)}
+                  title="阅读状态"
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button className="btn btn-ghost small" onClick={enterEdit} title="编辑（E）">
                 <Icon name="edit" size={15} />
                 编辑
@@ -710,28 +717,41 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
               </button>
             </>
           )}
-          <button
-            className={`btn btn-ghost small ${focusMode ? 'active' : ''}`}
-            onClick={() => void applyConfig({ readerLayout: focusMode ? 'document' : 'focus' })}
-            title="切换阅读布局：文档（三栏）/ 专注（单栏）"
-          >
-            <Icon name="layout" size={14} />
-            {focusMode ? '文档' : '专注'}
-          </button>
-          <button
-            className={`icon-btn ${panelOpen ? 'active' : ''}`}
-            onClick={() => {
-              if (focusMode) {
-                void applyConfig({ readerLayout: 'document' });
-                setPanelOpen(true);
-                return;
-              }
-              setPanelOpen((v) => !v);
-            }}
-            title="侧边面板"
-          >
-            <Icon name="sidebar" size={18} />
-          </button>
+          {!simple && (
+            <button
+              className={`btn btn-ghost small ${focusMode ? 'active' : ''}`}
+              onClick={() => void applyConfig({ readerLayout: focusMode ? 'document' : 'focus' })}
+              title="切换阅读布局：文档（三栏）/ 专注（单栏）"
+            >
+              <Icon name="layout" size={14} />
+              {focusMode ? '文档' : '专注'}
+            </button>
+          )}
+          {!simple && (
+            <button
+              className={`icon-btn ${panelOpen ? 'active' : ''}`}
+              onClick={() => {
+                if (focusMode) {
+                  void applyConfig({ readerLayout: 'document' });
+                  setPanelOpen(true);
+                  return;
+                }
+                setPanelOpen((v) => !v);
+              }}
+              title="侧边面板"
+            >
+              <Icon name="sidebar" size={18} />
+            </button>
+          )}
+          {simple && (
+            <button
+              className={`icon-btn ${tocOpen ? 'active' : ''}`}
+              onClick={() => setTocOpen((v) => !v)}
+              title="目录"
+            >
+              <Icon name="list" size={17} />
+            </button>
+          )}
           <button
             className={`icon-btn ${immersive ? 'active' : ''}`}
             onClick={() => setImmersive((v) => !v)}
@@ -770,11 +790,50 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
                 >
                   <Icon name="trash" size={15} /> 删除（进 .trash）
                 </button>
+                {!simple && onSwitchMode && (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onSwitchMode();
+                    }}
+                  >
+                    <Icon name="layout" size={15} /> 切换到简单视图
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
       </header>
+
+      {simple && tocOpen && (
+        <div className="toc-float" onMouseLeave={() => setTocOpen(false)}>
+          <div className="toc-float-head">
+            <span>目录</span>
+            <button className="icon-btn tiny" onClick={() => setTocOpen(false)} aria-label="关闭目录">
+              <Icon name="close" size={13} />
+            </button>
+          </div>
+          <div className="toc-float-body">
+            {toc.length === 0 ? (
+              <p className="muted small">这篇文档还没有标题</p>
+            ) : (
+              toc.map((item) => (
+                <button
+                  key={item.id}
+                  className={`toc-item level-${item.level} ${activeHeading === item.id ? 'active' : ''}`}
+                  onClick={() => {
+                    articleRef.current?.scrollToHeading(item.id);
+                    setTocOpen(false);
+                  }}
+                >
+                  {item.text}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="progress-line" aria-hidden="true">
         <i style={{ width: formatPercent(progress) }} />
@@ -791,7 +850,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
       )}
 
       <div className="reader-main">
-        {!immersive && !focusMode && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
+        {!immersive && !focusMode && !simple && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
 
         <div className="reader-content">
           {doc.source?.url && mode === 'read' && (
@@ -848,7 +907,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
           )}
         </div>
 
-        {!immersive && !focusMode && panelOpen && (
+        {!immersive && !focusMode && !simple && panelOpen && (
           <aside className="side-panel">
             <div className="panel-tabs">
               <button className={panelTab === 'notes' ? 'active' : ''} onClick={() => setPanelTab('notes')}>

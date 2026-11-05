@@ -71,6 +71,9 @@ await send('Page.enable');
 await send('Runtime.enable');
 await send('Page.navigate', { url: `${BASE}/#/doc/${created.id}` });
 await sleep(2200);
+// 复杂视图承载状态选择、侧栏等完整功能
+await evaluate(`localStorage.setItem('mr.app.mode','complex'); location.reload(); 'reload'`);
+await sleep(2400);
 
 // 1. 进入编辑
 await evaluate(`document.querySelector('.reader-actions .btn-ghost').click(); 'edit'`);
@@ -168,6 +171,25 @@ check('载入磁盘版本后正文为磁盘内容', afterLoad.body.includes('外
 
 const errors = exceptions.filter(Boolean);
 check('控制台无未捕获异常', errors.length === 0, errors.join(' | '));
+
+// 9. 简单视图：左侧文件树 + 中间文章 + 目录浮层，无状态导航
+await evaluate(`localStorage.setItem('mr.app.mode','simple'); location.reload(); 'reload'`);
+await sleep(2400);
+const simple = await evaluate(`JSON.stringify({
+  simple: !!document.querySelector('.simple'),
+  tree: !!document.querySelector('.simple-tree'),
+  article: !!document.querySelector('.article'),
+  statusSelect: !!document.querySelector('.status-select'),
+})`);
+const simpleState = JSON.parse(simple);
+check('简单视图渲染（文件树 + 文章）', simpleState.simple && simpleState.tree && simpleState.article);
+check('简单视图没有状态导航', simpleState.statusSelect === false);
+await evaluate(`[...document.querySelectorAll('.reader-actions .icon-btn')].find((b) => b.title === '目录')?.click(); 'toc'`);
+await sleep(400);
+check('目录以浮层展示', await evaluate(`!!document.querySelector('.toc-float')`));
+await evaluate(`document.querySelector('.toc-float .icon-btn')?.click(); 'close'`);
+await sleep(200);
+check('目录浮层可关闭', (await evaluate(`!document.querySelector('.toc-float')`)) === true);
 
 // 清理
 await api('DELETE', `/api/v1/docs/${created.id}`);

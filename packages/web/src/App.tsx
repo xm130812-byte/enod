@@ -6,6 +6,7 @@ import { ReaderPage } from './components/ReaderPage.tsx';
 import { SearchOverlay } from './components/SearchOverlay.tsx';
 import { SettingsDialog } from './components/SettingsDialog.tsx';
 import { NewDocDialog } from './components/DocDialogs.tsx';
+import { SimpleLayout } from './components/SimpleLayout.tsx';
 import type { AppConfig, DocPayload } from './types.ts';
 import { api } from './api.ts';
 import { Icon } from './components/Icons.tsx';
@@ -71,6 +72,22 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [appMode, setAppMode] = useState<'simple' | 'complex'>(() => {
+    try {
+      return localStorage.getItem('mr.app.mode') === 'complex' ? 'complex' : 'simple';
+    } catch {
+      return 'simple';
+    }
+  });
+
+  const switchMode = useCallback((mode: 'simple' | 'complex') => {
+    setAppMode(mode);
+    try {
+      localStorage.setItem('mr.app.mode', mode);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useTheme(config);
 
@@ -106,16 +123,17 @@ function Shell() {
 
   useEffect(() => {
     let depth = 0;
+    const dropEnabled = appMode === 'simple' || route.view === 'shelf';
     const hasFiles = (event: DragEvent): boolean =>
       Array.from(event.dataTransfer?.types ?? []).includes('Files');
     const onEnter = (event: DragEvent) => {
-      if (route.view !== 'shelf' || !hasFiles(event)) return;
+      if (!dropEnabled || !hasFiles(event)) return;
       event.preventDefault();
       depth++;
       setDragOver(true);
     };
     const onOver = (event: DragEvent) => {
-      if (route.view !== 'shelf' || !hasFiles(event)) return;
+      if (!dropEnabled || !hasFiles(event)) return;
       event.preventDefault();
     };
     const onLeave = (event: DragEvent) => {
@@ -124,7 +142,7 @@ function Shell() {
       if (depth === 0) setDragOver(false);
     };
     const onDrop = (event: DragEvent) => {
-      if (route.view !== 'shelf' || !hasFiles(event)) return;
+      if (!dropEnabled || !hasFiles(event)) return;
       event.preventDefault();
       depth = 0;
       setDragOver(false);
@@ -145,7 +163,7 @@ function Shell() {
       window.removeEventListener('dragleave', onLeave);
       window.removeEventListener('drop', onDrop);
     };
-  }, [route.view, importFiles, toast]);
+  }, [appMode, route.view, importFiles, toast]);
 
   const backToShelf = useCallback(() => {
     window.location.hash = '#/';
@@ -175,14 +193,30 @@ function Shell() {
 
   return (
     <div className="app">
-      {route.view === 'doc' ? (
-        <ReaderPage key={route.id} docId={route.id} onBack={backToShelf} onOpenDoc={openDoc} />
+      {appMode === 'simple' ? (
+        <SimpleLayout
+          docId={route.view === 'doc' ? route.id : null}
+          onOpenDoc={openDoc}
+          onSwitchMode={() => switchMode('complex')}
+          onNewDoc={() => setNewDocOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSearch={() => setSearchOpen(true)}
+        />
+      ) : route.view === 'doc' ? (
+        <ReaderPage
+          key={route.id}
+          docId={route.id}
+          onBack={backToShelf}
+          onOpenDoc={openDoc}
+          onSwitchMode={() => switchMode('simple')}
+        />
       ) : (
         <ShelfPage
           onOpenDoc={openDoc}
           onNewDoc={() => setNewDocOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onSwitchMode={() => switchMode('simple')}
         />
       )}
 

@@ -978,6 +978,222 @@ kbd {
   gap: 4px;
 }
 
+/* ------------------------------------------------------------ 简单视图（文件夹 + 文章） */
+
+.simple {
+  height: 100%;
+  display: flex;
+  background: var(--bg);
+}
+
+.simple-side {
+  width: 258px;
+  flex: none;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+.simple-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.simple-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.simple-root-files {
+  padding-bottom: 4px;
+}
+.simple-folder {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding-right: 8px;
+  border-left: 2px solid transparent;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+}
+.simple-folder:hover {
+  background: var(--bg-soft);
+  color: var(--fg);
+}
+.simple-caret {
+  width: 14px;
+  height: 14px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--fg-3);
+  flex: none;
+}
+.simple-folder-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.simple-count {
+  font-size: 10px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.simple-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 27px;
+  padding-right: 10px;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  text-align: left;
+}
+.simple-file:hover {
+  background: var(--bg-soft);
+  color: var(--fg);
+}
+.simple-file.active {
+  background: var(--bg-soft);
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+.simple-file-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.simple-file-meta {
+  font-size: 10px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.simple-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.simple-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.simple-main .reader {
+  height: 100%;
+}
+.simple-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px;
+  text-align: center;
+  color: var(--fg-3);
+}
+.simple-empty h2 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.simple-empty p {
+  margin: 0;
+}
+.simple-recent {
+  margin: 14px 0 8px;
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+.simple-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  color: var(--fg);
+  font-size: 12.5px;
+}
+.simple-recent-item:hover {
+  background: var(--bg-soft);
+}
+.simple-recent-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader.simple-view .toc,
+.reader.simple-view .side-panel {
+  display: none;
+}
+.reader.simple-view .article-wrap {
+  padding: 28px 40px 20px;
+}
+
+.toc-float {
+  position: absolute;
+  top: 46px;
+  left: 14px;
+  z-index: 40;
+  width: 250px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+}
+.toc-float-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  flex: none;
+}
+.toc-float-body {
+  overflow-y: auto;
+  padding: 6px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
 /* ------------------------------------------------------------ 文件夹视图 */
 
 .explorer {

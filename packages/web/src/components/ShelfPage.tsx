@@ -17,6 +17,7 @@ interface ShelfPageProps {
   onNewDoc: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
+  onSwitchMode: () => void;
 }
 
 const STATUS_TABS: { key: StatusFilter; label: string; icon: IconName }[] = [
@@ -73,7 +74,7 @@ function sortDocs(docs: DocSummary[], sort: SortKey): DocSummary[] {
   return list.sort((a, b) => b.mtime - a.mtime);
 }
 
-export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }: ShelfPageProps) {
+export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings, onSwitchMode }: ShelfPageProps) {
   const { docs, tags, info, loading, error, refresh, refreshDocs, progress, config } = useLibrary();
   const { toast } = useToast();
   const density = config?.density ?? 'comfortable';
@@ -213,6 +214,10 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
         </button>
 
         <div className="head-actions">
+          <button className="btn btn-ghost small" onClick={onSwitchMode} title="简单视图：左侧文件夹 + 中间文章">
+            <Icon name="layout" size={14} />
+            简单
+          </button>
           <button className="btn btn-primary" onClick={onNewDoc}>
             <Icon name="plus" size={16} />
             新建
