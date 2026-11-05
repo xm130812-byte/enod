@@ -1,0 +1,1017 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api, ApiError } from '../api.ts';
+import type {
+  Annotation,
+  AnnotationColor,
+  ConflictDetail,
+  DocPayload,
+  DocStatus,
+} from '../types.ts';
+import { useLibrary } from '../hooks/useLibrary.tsx';
+import { useToast } from '../hooks/useToast.tsx';
+import { ArticleView } from './ArticleView.tsx';
+import type { ArticleHandle } from './ArticleView.tsx';
+import { EditorViewPane } from '../editor/EditorViewPane.tsx';
+import type { EditorHandle } from '../editor/EditorViewPane.tsx';
+import { Toc } from './Toc.tsx';
+import type { TocItem } from './Toc.tsx';
+import { SelectionToolbar } from './SelectionToolbar.tsx';
+import { Lightbox } from './Lightbox.tsx';
+import { ConflictDialog } from './ConflictDialog.tsx';
+import { MoveDialog } from './DocDialogs.tsx';
+import { Modal } from './Modal.tsx';
+import { Icon } from './Icons.tsx';
+import { getSelectionInfo } from '../lib/annotate.ts';
+import type { SelectionInfo } from '../lib/annotate.ts';
+import { clamp, formatPercent, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
+
+interface ReaderPageProps {
+  docId: string;
+  onBack: () => void;
+  onOpenDoc: (id: string) => void;
+}
+
+type PanelTab = 'notes' | 'backlinks' | 'links';
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
+  { value: 'unread', label: '未读' },
+  { value: 'reading', label: '在读' },
+  { value: 'done', label: '已读' },
+];
+
+const scrollMemory = new Map<string, number>();
+
+export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
+  const { config, info, docs, resolveWiki, refreshDocs } = useLibrary();
+  const { toast } = useToast();
+
+  const [doc, setDoc] = useState<DocPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'read' | 'edit'>('read');
+  const [dirty, setDirty] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [conflict, setConflict] = useState<ConflictDetail | null>(null);
+  const [externalChanged, setExternalChanged] = useState(false);
+  const [toc, setToc] = useState<TocItem[]>([]);
+  const [activeHeading, setActiveHeading] = useState<string | null>(null);
+  const [orphans, setOrphans] = useState<string[]>([]);
+  const [panelTab, setPanelTab] = useState<PanelTab>('notes');
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [immersive, setImmersive] = useState(false);
+  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moveMode, setMoveMode] = useState<'move' | 'rename' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [focusAnnId, setFocusAnnId] = useState<string | null>(null);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<ArticleHandle>(null);
+  const editorRef = useRef<EditorHandle>(null);
+  const docRef = useRef<DocPayload | null>(null);
+  const bodyRef = useRef('');
+  const dirtyRef = useRef(false);
+  const modeRef = useRef<'read' | 'edit'>('read');
+  const progressRef = useRef(0);
+  const saveInFlight = useRef(false);
+  const pendingSave = useRef<string | null>(null);
+  const scrollTick = useRef(false);
+  const configRef = useRef(config);
+  const toastRef = useRef(toast);
+  configRef.current = config;
+  toastRef.current = toast;
+
+  const updateDoc = (updater: (current: DocPayload) => DocPayload) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const next = updater(prev);
+      docRef.current = next;
+      return next;
+    });
+  };
+
+  /* ---------------------------------------------------------------- load */
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setMode('read');
+    modeRef.current = 'read';
+    setDirty(false);
+    dirtyRef.current = false;
+    setSaveState('idle');
+    setConflict(null);
+    setExternalChanged(false);
+    setSelection(null);
+    setOrphans([]);
+    setProgress(0);
+    setMoreOpen(false);
+
+    api
+      .doc(docId)
+      .then((payload) => {
+        if (cancelled) return;
+        setDoc(payload);
+        docRef.current = payload;
+        bodyRef.current = payload.body;
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : '无法打开文档');
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [docId]);
+
+  // 恢复滚动位置
+  useEffect(() => {
+    if (!doc) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const saved = scrollMemory.get(doc.id);
+    const ratio = saved ?? doc.progress ?? 0;
+    requestAnimationFrame(() => {
+      const max = el.scrollHeight - el.clientHeight;
+      if (max > 0) el.scrollTop = clamp(ratio, 0, 1) * max;
+    });
+  }, [doc?.id]);
+
+  // 离开文档时记录进度
+  useEffect(() => {
+    const id = docId;
+    return () => {
+      const ratio = progressRef.current;
+      if (!Number.isFinite(ratio)) return;
+      scrollMemory.set(id, ratio);
+      try {
+        localStorage.setItem(`mr.progress.${id}`, String(ratio));
+      } catch {
+        /* ignore */
+      }
+      if (configRef.current?.syncProgress) {
+        void api.saveDoc(id, { reader: { progress: ratio } }).catch(() => {});
+      }
+    };
+  }, [docId]);
+
+  /* ---------------------------------------------------------------- SSE */
+
+  useEffect(() => {
+    const es = new EventSource(api.eventsUrl());
+    const onChanged = (event: MessageEvent<string>) => {
+      try {
+        const data = JSON.parse(event.data) as { id?: string; origin?: string; kind?: string };
+        if (data.id !== docId) return;
+        if (data.origin === 'save' || data.origin === 'create') return;
+        if (data.kind === 'removed') {
+          toastRef.current('这篇文档已被删除', 'error');
+          onBack();
+          return;
+        }
+        if (modeRef.current === 'edit' && dirtyRef.current) {
+          setExternalChanged(true);
+          return;
+        }
+        void api.doc(docId).then((fresh) => {
+          const el = scrollRef.current;
+          const keep = el ? el.scrollTop : 0;
+          setDoc(fresh);
+          docRef.current = fresh;
+          bodyRef.current = fresh.body;
+          requestAnimationFrame(() => {
+            if (el) el.scrollTop = keep;
+          });
+        }).catch(() => {});
+      } catch {
+        /* ignore */
+      }
+    };
+    const onRemoved = (event: MessageEvent<string>) => {
+      try {
+        const data = JSON.parse(event.data) as { id?: string };
+        if (data.id !== docId) return;
+        toastRef.current('这篇文档已被删除', 'error');
+        onBack();
+      } catch {
+        /* ignore */
+      }
+    };
+    es.addEventListener('doc-changed', onChanged as EventListener);
+    es.addEventListener('doc-removed', onRemoved as EventListener);
+    return () => es.close();
+  }, [docId, onBack]);
+
+  /* ---------------------------------------------------------------- save */
+
+  const save = async (body: string, opts: { baseHash?: string } = {}): Promise<boolean> => {
+    const current = docRef.current;
+    if (!current) return false;
+    if (saveInFlight.current) {
+      pendingSave.current = body;
+      return false;
+    }
+    saveInFlight.current = true;
+    setSaveState('saving');
+    try {
+      const res = await api.saveDoc(current.id, { body, baseHash: opts.baseHash ?? current.rawHash });
+      updateDoc((d) => ({
+        ...d,
+        body,
+        rawHash: res.hash,
+        mtime: res.mtime,
+        encoding: res.encoding,
+        words: countWordsApprox(body),
+      }));
+      bodyRef.current = body;
+      setDirty(false);
+      dirtyRef.current = false;
+      editorRef.current?.markSaved();
+      setSaveState('saved');
+      window.setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1600);
+      void refreshDocs();
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const detail = err.detail as ConflictDetail;
+        setConflict(detail);
+        setSaveState('error');
+        return false;
+      }
+      setSaveState('error');
+      toastRef.current(err instanceof Error ? err.message : '保存失败', 'error');
+      return false;
+    } finally {
+      saveInFlight.current = false;
+      const queued = pendingSave.current;
+      pendingSave.current = null;
+      if (queued !== null) void save(queued);
+    }
+  };
+
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  const exitEdit = async (): Promise<void> => {
+    if (modeRef.current !== 'edit') return;
+    if (dirtyRef.current) {
+      const ok = await saveRef.current(bodyRef.current);
+      if (!ok) return;
+    }
+    setMode('read');
+    modeRef.current = 'read';
+    setSaveState('idle');
+    setDirty(false);
+    dirtyRef.current = false;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const ratio = clamp(progressRef.current, 0, 1);
+      el.scrollTop = ratio * Math.max(0, el.scrollHeight - el.clientHeight);
+    });
+  };
+
+  const enterEdit = (): void => {
+    if (!doc) return;
+    setMode('edit');
+    modeRef.current = 'edit';
+    setDirty(false);
+    dirtyRef.current = false;
+    setSaveState('idle');
+    setSelection(null);
+    setExternalChanged(false);
+  };
+
+  /* ------------------------------------------------------- external reload */
+
+  const reloadFromDisk = async (): Promise<void> => {
+    try {
+      const fresh = await api.doc(docId);
+      const el = scrollRef.current;
+      const keep = el ? el.scrollTop : 0;
+      setDoc(fresh);
+      docRef.current = fresh;
+      bodyRef.current = fresh.body;
+      setExternalChanged(false);
+      setDirty(false);
+      dirtyRef.current = false;
+      editorRef.current?.setBody(fresh.body);
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = keep;
+      });
+      toast('已载入磁盘上的最新版本', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '载入失败', 'error');
+    }
+  };
+
+  /* ------------------------------------------------------------- actions */
+
+  const changeStatus = async (status: DocStatus): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      const res = await api.setStatus(current.id, status);
+      updateDoc((d) => ({ ...d, status, rawHash: res.hash, mtime: res.mtime }));
+      void refreshDocs();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '修改状态失败', 'error');
+    }
+  };
+
+  const createAnnotation = async (color: AnnotationColor, withNote = false): Promise<void> => {
+    const current = docRef.current;
+    if (!current || !selection) return;
+    try {
+      const res = await api.addAnnotation(current.id, {
+        exact: selection.exact,
+        prefix: selection.prefix,
+        suffix: selection.suffix,
+        pos: selection.pos,
+        color,
+      });
+      updateDoc((d) => ({ ...d, annotations: [...d.annotations, res.annotation], annCount: d.annCount + 1 }));
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+      if (withNote) {
+        setPanelOpen(true);
+        setPanelTab('notes');
+        setFocusAnnId(res.annotation.id);
+      }
+      toast(withNote ? '已高亮，写点想法吧' : '已添加高亮', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '添加批注失败', 'error');
+    }
+  };
+
+  const saveNote = async (annotation: Annotation, note: string): Promise<void> => {
+    const current = docRef.current;
+    if (!current || note === annotation.note) return;
+    try {
+      const res = await api.updateAnnotation(current.id, annotation.id, { note });
+      updateDoc((d) => ({
+        ...d,
+        annotations: d.annotations.map((a) => (a.id === annotation.id ? res.annotation : a)),
+      }));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '批注保存失败', 'error');
+    }
+  };
+
+  const deleteAnnotation = async (annotation: Annotation): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      await api.deleteAnnotation(current.id, annotation.id);
+      updateDoc((d) => ({
+        ...d,
+        annotations: d.annotations.filter((a) => a.id !== annotation.id),
+        annCount: Math.max(0, d.annCount - 1),
+      }));
+      toast('已删除批注', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '删除失败', 'error');
+    }
+  };
+
+  const rebindAnnotation = async (annotation: Annotation): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    if (!selection) {
+      toast('先在正文中选中要重新绑定的文字', 'error');
+      return;
+    }
+    try {
+      const created = await api.addAnnotation(current.id, {
+        exact: selection.exact,
+        prefix: selection.prefix,
+        suffix: selection.suffix,
+        pos: selection.pos,
+        color: annotation.color,
+        note: annotation.note,
+      });
+      await api.deleteAnnotation(current.id, annotation.id);
+      updateDoc((d) => ({
+        ...d,
+        annotations: [...d.annotations.filter((a) => a.id !== annotation.id), created.annotation],
+      }));
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+      toast('已重新绑定', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '重新绑定失败', 'error');
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    const current = docRef.current;
+    if (!current) return null;
+    try {
+      const res = await api.uploadAsset(current.id, file, file.name || 'pasted.png');
+      toast('图片已保存到 assets/', 'success');
+      return res.relPath;
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '图片上传失败', 'error');
+      return null;
+    }
+  };
+
+  const copyQuote = async (): Promise<void> => {
+    if (!selection) return;
+    const quote = `> ${selection.exact}\n\n——「${doc?.title ?? ''}」`;
+    try {
+      await navigator.clipboard.writeText(quote);
+      toast('引用已复制', 'success');
+    } catch {
+      toast('复制失败', 'error');
+    }
+    setSelection(null);
+  };
+
+  /* --------------------------------------------------------------- events */
+
+  useEffect(() => {
+    const onMouseUp = () => {
+      window.setTimeout(() => {
+        const article = scrollRef.current?.querySelector<HTMLElement>('.article');
+        if (!article) return;
+        setSelection(getSelectionInfo(article));
+      }, 0);
+    };
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) setSelection(null);
+    };
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => {
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('selectionchange', onSelectionChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const typing = Boolean(target.closest('input, textarea, [contenteditable="true"], .cm-editor'));
+      if (event.key === 'Escape') {
+        if (moreOpen) {
+          setMoreOpen(false);
+          return;
+        }
+        if (selection) {
+          setSelection(null);
+          return;
+        }
+        if (immersive) {
+          setImmersive(false);
+          return;
+        }
+        if (modeRef.current === 'edit') {
+          void exitEdit();
+          return;
+        }
+      }
+      if (typing) return;
+      if (event.key === 'e' || event.key === 'E') {
+        if (modeRef.current === 'read') enterEdit();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        if (modeRef.current === 'read') enterEdit();
+        else void exitEdit();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selection, immersive, moreOpen]);
+
+  const onScroll = (): void => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    const ratio = max > 0 ? clamp(el.scrollTop / max, 0, 1) : 0;
+    progressRef.current = ratio;
+    if (scrollTick.current) return;
+    scrollTick.current = true;
+    requestAnimationFrame(() => {
+      scrollTick.current = false;
+      setProgress(ratio);
+      const containerTop = el.getBoundingClientRect().top;
+      const headings = [...el.querySelectorAll<HTMLElement>('h1, h2, h3')];
+      let current: string | null = null;
+      for (const heading of headings) {
+        if (heading.getBoundingClientRect().top - containerTop <= 150) current = heading.id;
+        else break;
+      }
+      setActiveHeading(current);
+    });
+  };
+
+  const jumpToAnnotation = (id: string): void => {
+    articleRef.current?.flash(id);
+    setFocusAnnId(id);
+  };
+
+  const handleWikiNavigate = (href: string, anchor: string | null): void => {
+    const target = href.replace(/^#\/doc\//, '');
+    if (target === docId) {
+      if (anchor) articleRef.current?.scrollToHeading(anchor);
+      return;
+    }
+    onOpenDoc(target);
+    if (anchor) {
+      window.setTimeout(() => {
+        const el = scrollRef.current?.querySelector<HTMLElement>(`[id="${CSS.escape(anchor)}"]`);
+        el?.scrollIntoView({ block: 'start' });
+      }, 400);
+    }
+  };
+
+  const annotationList = doc?.annotations ?? [];
+  const orphanList = useMemo(() => annotationList.filter((a) => orphans.includes(a.id)), [annotationList, orphans]);
+  const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
+  const statusLabelText = doc ? statusLabel(doc.status) : '';
+  const theme = config?.theme === 'dark' || (config?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+
+  if (loading) {
+    return (
+      <div className="reader">
+        <div className="reader-loading">
+          <div className="spinner" />
+          <p className="muted">正在打开…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !doc) {
+    return (
+      <div className="reader">
+        <div className="reader-error">
+          <Icon name="alert" size={28} />
+          <h2>打不开这篇文档</h2>
+          <p className="muted">{error ?? '未知错误'}</p>
+          <button className="btn btn-ghost" onClick={onBack}>
+            回到书架
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`reader ${immersive ? 'immersive' : ''}`}>
+      <header className="reader-head">
+        <button className="icon-btn" onClick={onBack} title="返回书架（Esc）">
+          <Icon name="back" size={19} />
+        </button>
+
+        <div className="reader-title">
+          <h1 title={doc.title}>{doc.title}</h1>
+          <div className="reader-meta">
+            <span>{doc.relPath}</span>
+            <span>{formatWords(doc.words)}</span>
+            <span>更新于 {formatRelativeTime(doc.mtime)}</span>
+            {doc.encoding !== 'utf8' && <span className="encoding-badge">{doc.encoding.toUpperCase()}</span>}
+            {mode === 'edit' && (
+              <span className={`save-state ${saveState} ${dirty ? 'dirty' : ''}`}>
+                {saveState === 'saving'
+                  ? '保存中…'
+                  : saveState === 'error'
+                    ? '保存失败'
+                    : dirty
+                      ? '未保存'
+                      : '已保存'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="reader-actions">
+          {mode === 'read' && (
+            <>
+              <select
+                className="select status-select"
+                value={doc.status}
+                onChange={(e) => void changeStatus(e.target.value as DocStatus)}
+                title="阅读状态"
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button className="btn btn-ghost small" onClick={enterEdit} title="编辑（E）">
+                <Icon name="edit" size={15} />
+                编辑
+              </button>
+            </>
+          )}
+          {mode === 'edit' && (
+            <>
+              <button className="btn btn-ghost small" onClick={() => void saveRef.current(bodyRef.current)}>
+                <Icon name="save" size={15} />
+                保存
+              </button>
+              <button className="btn btn-primary small" onClick={() => void exitEdit()}>
+                完成
+              </button>
+            </>
+          )}
+          <button
+            className={`icon-btn ${panelOpen ? 'active' : ''}`}
+            onClick={() => setPanelOpen((v) => !v)}
+            title="侧边面板"
+          >
+            <Icon name="sidebar" size={18} />
+          </button>
+          <button
+            className={`icon-btn ${immersive ? 'active' : ''}`}
+            onClick={() => setImmersive((v) => !v)}
+            title="沉浸模式（Esc 退出）"
+          >
+            <Icon name="book" size={18} />
+          </button>
+          <div className="more-wrap">
+            <button className="icon-btn" onClick={() => setMoreOpen((v) => !v)} title="更多">
+              <Icon name="more" size={18} />
+            </button>
+            {moreOpen && (
+              <div className="menu" onMouseLeave={() => setMoreOpen(false)}>
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setMoveMode('rename');
+                  }}
+                >
+                  <Icon name="edit" size={15} /> 重命名
+                </button>
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setMoveMode('move');
+                  }}
+                >
+                  <Icon name="folder" size={15} /> 移动到…
+                </button>
+                <button
+                  className="danger"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setConfirmDelete(true);
+                  }}
+                >
+                  <Icon name="trash" size={15} /> 删除（进 .trash）
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div className="progress-line" aria-hidden="true">
+        <i style={{ width: formatPercent(progress) }} />
+      </div>
+
+      {externalChanged && (
+        <div className="banner warning">
+          <Icon name="alert" size={16} />
+          <span>磁盘上的文件被外部修改了。你的编辑还没保存，保存时会要求你处理冲突。</span>
+          <button className="btn btn-ghost small" onClick={() => void reloadFromDisk()}>
+            载入磁盘版本
+          </button>
+        </div>
+      )}
+
+      <div className="reader-main">
+        {!immersive && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
+
+        <div className="reader-content">
+          {doc.source?.url && mode === 'read' && (
+            <div className="source-bar">
+              <Icon name="link" size={14} />
+              <span>来源：{doc.source.site ?? doc.source.url}</span>
+              <a href={doc.source.url} target="_blank" rel="noopener noreferrer">
+                打开原文
+                <Icon name="external" size={12} />
+              </a>
+            </div>
+          )}
+
+          {mode === 'read' ? (
+            <div className="reader-scroll" ref={scrollRef} onScroll={onScroll}>
+              <div className="article-wrap">
+                <ArticleView
+                  ref={articleRef}
+                  doc={doc}
+                  theme={theme}
+                  resolveWiki={resolveWiki}
+                  onNavigateWiki={handleWikiNavigate}
+                  onAnnotationClick={jumpToAnnotation}
+                  onToc={setToc}
+                  onAnchors={({ orphaned }) => setOrphans(orphaned)}
+                  onImage={(src, alt) => setLightbox({ src, alt })}
+                />
+                <footer className="article-foot">
+                  <span>{formatWords(doc.words)}</span>
+                  <span>{doc.relPath}</span>
+                  <span>{annotationList.length} 条批注</span>
+                </footer>
+              </div>
+            </div>
+          ) : (
+            <div className="editor-pane">
+              <EditorViewPane
+                ref={editorRef}
+                docId={doc.id}
+                initialBody={bodyRef.current}
+                docs={docs}
+                autosave={config?.autosave ?? true}
+                imageUrl={(src) => api.fileUrl(src)}
+                resolveWiki={(target) => resolveWiki(target)}
+                onBodyChange={(body) => {
+                  bodyRef.current = body;
+                }}
+                onDirtyChange={setDirty}
+                onSaveRequest={() => void saveRef.current(bodyRef.current)}
+                onExitRequest={() => void exitEdit()}
+                onUploadImage={uploadImage}
+              />
+            </div>
+          )}
+        </div>
+
+        {!immersive && panelOpen && (
+          <aside className="side-panel">
+            <div className="panel-tabs">
+              <button className={panelTab === 'notes' ? 'active' : ''} onClick={() => setPanelTab('notes')}>
+                批注 <span className="count">{annotationList.length}</span>
+              </button>
+              <button className={panelTab === 'backlinks' ? 'active' : ''} onClick={() => setPanelTab('backlinks')}>
+                反链 <span className="count">{doc.backlinks.length}</span>
+              </button>
+              <button className={panelTab === 'links' ? 'active' : ''} onClick={() => setPanelTab('links')}>
+                出链 <span className="count">{doc.links.length}</span>
+              </button>
+            </div>
+
+            <div className="panel-body">
+              {panelTab === 'notes' && (
+                <>
+                  {annotationList.length === 0 && (
+                    <p className="panel-empty">选中正文中的一段文字，就能划高亮、写旁注。批注会写进这篇文件的 frontmatter。</p>
+                  )}
+                  {orphanList.length > 0 && (
+                    <section className="orphan-group">
+                      <h4>
+                        <Icon name="alert" size={14} /> 已失效批注（{orphanList.length}）
+                      </h4>
+                      <p className="muted small">原文被改动太多，找不到锚点。选中新的文字后可重新绑定。</p>
+                      {orphanList.map((ann) => (
+                        <article key={ann.id} className="ann-item orphan">
+                          <blockquote>{ann.exact}</blockquote>
+                          <div className="ann-actions">
+                            <button className="btn btn-ghost tiny" onClick={() => void rebindAnnotation(ann)}>
+                              绑定到选中文字
+                            </button>
+                            <button className="btn btn-ghost tiny danger" onClick={() => void deleteAnnotation(ann)}>
+                              删除
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </section>
+                  )}
+                  {healthyList.map((ann) => (
+                    <AnnotationCard
+                      key={ann.id}
+                      annotation={ann}
+                      focused={focusAnnId === ann.id}
+                      onJump={() => jumpToAnnotation(ann.id)}
+                      onSaveNote={(note) => void saveNote(ann, note)}
+                      onDelete={() => void deleteAnnotation(ann)}
+                    />
+                  ))}
+                </>
+              )}
+
+              {panelTab === 'backlinks' && (
+                <>
+                  {doc.backlinks.length === 0 && <p className="panel-empty">还没有别的文档链接到这里。用 [[{doc.title}]] 试试。</p>}
+                  {doc.backlinks.map((back) => (
+                    <button key={back.srcId + back.relPath} className="backlink-item" onClick={() => onOpenDoc(back.srcId)}>
+                      <span className="backlink-title">
+                        <Icon name="link" size={13} /> {back.srcTitle}
+                      </span>
+                      <span className="backlink-context">{back.context}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {panelTab === 'links' && (
+                <>
+                  {doc.links.length === 0 && <p className="panel-empty">这篇文档还没有 [[]] 链接。</p>}
+                  {doc.links.map((link) => (
+                    <button
+                      key={link.dstRaw + (link.anchor ?? '')}
+                      className={`outlink-item ${link.broken ? 'broken' : ''}`}
+                      disabled={link.broken}
+                      onClick={() => link.dstId && onOpenDoc(link.dstId)}
+                    >
+                      <span className="outlink-title">
+                        <Icon name={link.broken ? 'alert' : 'link'} size={13} />
+                        {link.dstTitle ?? link.dstRaw}
+                        {link.anchor ? `#${link.anchor}` : ''}
+                      </span>
+                      {link.broken && <span className="outlink-broken">目标不存在</span>}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {selection && mode === 'read' && (
+        <SelectionToolbar info={selection} onColor={(color, withNote) => void createAnnotation(color, withNote)} onCopy={() => void copyQuote()} />
+      )}
+
+      {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
+
+      {conflict && (
+        <ConflictDialog
+          doc={doc}
+          conflict={conflict}
+          mine={bodyRef.current}
+          onLoadDisk={() => {
+            void reloadFromDisk();
+            setConflict(null);
+          }}
+          onSaveCopy={() => {
+            void (async () => {
+              try {
+                const created = await api.createDoc({
+                  dir: doc.relPath.includes('/') ? doc.relPath.slice(0, doc.relPath.lastIndexOf('/')) : 'Inbox',
+                  title: `${doc.title}（冲突副本）`,
+                  content: bodyRef.current,
+                });
+                toast(`已另存为「${created.title}」`, 'success');
+                await reloadFromDisk();
+                setConflict(null);
+              } catch (err) {
+                toast(err instanceof Error ? err.message : '另存失败', 'error');
+              }
+            })();
+          }}
+          onMerge={async (merged, diskHash) => {
+            const ok = await saveRef.current(merged, { baseHash: diskHash });
+            if (ok) {
+              setConflict(null);
+              setMode('read');
+              modeRef.current = 'read';
+              toast('合并结果已保存', 'success');
+            }
+          }}
+          onClose={() => setConflict(null)}
+        />
+      )}
+
+      {moveMode && (
+        <MoveDialog
+          doc={doc}
+          dirs={info?.dirs ?? []}
+          mode={moveMode}
+          onClose={() => setMoveMode(null)}
+          onMoved={(next) => {
+            setDoc(next);
+            docRef.current = next;
+            bodyRef.current = next.body;
+            if (next.id !== docId) onOpenDoc(next.id);
+            void refreshDocs();
+          }}
+        />
+      )}
+
+      {confirmDelete && (
+        <Modal
+          title="删除文档"
+          subtitle={doc.relPath}
+          onClose={() => setConfirmDelete(false)}
+          footer={
+            <>
+              <button className="btn btn-ghost" onClick={() => setConfirmDelete(false)}>
+                取消
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      await api.deleteDoc(doc.id);
+                      toast('已移入 .trash/', 'success');
+                      onBack();
+                    } catch (err) {
+                      toast(err instanceof Error ? err.message : '删除失败', 'error');
+                    }
+                  })();
+                }}
+              >
+                移入 .trash
+              </button>
+            </>
+          }
+        >
+          <p className="muted">文件会被移到书库的 .trash/ 目录，可以手动恢复，不会物理删除。</p>
+        </Modal>
+      )}
+
+      <div className="read-status" title={`${statusLabelText} · ${formatPercent(progress)}`}>
+        <span className={`status-dot status-${doc.status}`} />
+        {formatPercent(progress)} · {formatWords(doc.words)}
+      </div>
+    </div>
+  );
+}
+
+function AnnotationCard({
+  annotation,
+  focused,
+  onJump,
+  onSaveNote,
+  onDelete,
+}: {
+  annotation: Annotation;
+  focused: boolean;
+  onJump: () => void;
+  onSaveNote: (note: string) => void;
+  onDelete: () => void;
+}) {
+  const [note, setNote] = useState(annotation.note);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setNote(annotation.note);
+  }, [annotation.note, annotation.id]);
+
+  useEffect(() => {
+    if (focused) {
+      const timer = window.setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(note.length, note.length);
+      }, 60);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [focused, note.length]);
+
+  return (
+    <article
+      className={`ann-item ${focused ? 'focused' : ''}`}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('textarea, button')) return;
+        onJump();
+      }}
+    >
+      <div className="ann-head">
+        <span className={`ann-color dot-${annotation.color}`} />
+        <blockquote className="ann-exact" onClick={onJump}>
+          {annotation.exact}
+        </blockquote>
+        <button className="icon-btn tiny" onClick={onDelete} title="删除批注">
+          <Icon name="trash" size={13} />
+        </button>
+      </div>
+      <textarea
+        ref={textareaRef}
+        className="ann-note"
+        value={note}
+        placeholder="写点想法…"
+        rows={note.split('\n').length > 1 ? Math.min(6, note.split('\n').length) : 2}
+        onChange={(e) => setNote(e.target.value)}
+        onBlur={() => onSaveNote(note)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      <footer className="ann-foot">{annotation.created ? formatRelativeTime(Date.parse(annotation.created)) : ''}</footer>
+    </article>
+  );
+}
+
+function countWordsApprox(body: string): number {
+  const cjk = (body.match(/[\u3400-\u4dbf\u4e00-\u9fff]/g) ?? []).length;
+  const latin = (body.replace(/[\u3400-\u4dbf\u4e00-\u9fff]/g, ' ').match(/[A-Za-z0-9_]+/g) ?? []).length;
+  return cjk + latin;
+}

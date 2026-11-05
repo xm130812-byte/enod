@@ -1,0 +1,354 @@
+/* ============================================================
+   阅读视图排版
+   ============================================================ */
+
+.article {
+  max-width: var(--reader-measure);
+  margin: 0 auto;
+  font-family: var(--font-body);
+  font-size: var(--reader-font-size);
+  line-height: var(--reader-line-height);
+  color: var(--ink);
+  overflow-wrap: break-word;
+  letter-spacing: 0.01em;
+  font-variant-numeric: proportional-nums;
+}
+
+.article > :first-child {
+  margin-top: 0;
+}
+
+.article h1,
+.article h2,
+.article h3,
+.article h4,
+.article h5,
+.article h6 {
+  font-family: var(--font-body);
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--ink);
+  margin: 2em 0 0.65em;
+  scroll-margin-top: 24px;
+  text-wrap: balance;
+}
+.article h1 {
+  font-size: 1.75em;
+  margin-top: 0.4em;
+  letter-spacing: -0.01em;
+}
+.article h2 {
+  font-size: 1.38em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--line);
+}
+.article h3 {
+  font-size: 1.16em;
+}
+.article h4 {
+  font-size: 1.02em;
+}
+.article h5,
+.article h6 {
+  font-size: 0.95em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.article p {
+  margin: 0 0 1.05em;
+}
+
+.article a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--accent) 40%, transparent);
+  transition: text-decoration-color 0.15s ease;
+}
+.article a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.article a.wiki-link {
+  text-decoration-style: dotted;
+  background: color-mix(in oklab, var(--accent) 7%, transparent);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.article a.wiki-broken {
+  color: var(--danger);
+  text-decoration-style: wavy;
+  text-decoration-color: color-mix(in oklab, var(--danger) 55%, transparent);
+  background: transparent;
+  cursor: help;
+}
+
+.article strong {
+  font-weight: 680;
+}
+.article em {
+  font-style: italic;
+}
+.article del {
+  color: var(--ink-muted);
+}
+
+.article ul,
+.article ol {
+  margin: 0 0 1.05em;
+  padding-left: 1.4em;
+}
+.article li {
+  margin: 0.3em 0;
+}
+.article li > p {
+  margin: 0.3em 0;
+}
+.article ul.contains-task-list,
+.article li.task-list-item {
+  list-style: none;
+}
+.article li.task-list-item {
+  margin-left: -1.2em;
+}
+.article input[type='checkbox'] {
+  margin-right: 0.5em;
+  accent-color: var(--accent);
+  transform: translateY(1px);
+}
+
+.article blockquote {
+  margin: 1.4em 0;
+  padding: 0.2em 0 0.2em 1.1em;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-soft);
+  font-style: normal;
+}
+.article blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.article hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2.2em 0;
+}
+
+.article code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.38em;
+  border: 1px solid color-mix(in oklab, var(--line) 70%, transparent);
+}
+
+.article pre.code-block {
+  position: relative;
+  margin: 1.4em 0;
+  padding: 14px 16px;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  line-height: 1.62;
+  tab-size: 2;
+}
+.article pre.code-block code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1em;
+  display: block;
+  counter-reset: line;
+}
+.article pre.code-block .line {
+  display: block;
+  padding-left: 2.4em;
+  position: relative;
+  min-height: 1.62em;
+}
+.article pre.code-block .line::before {
+  counter-increment: line;
+  content: counter(line);
+  position: absolute;
+  left: 0;
+  width: 1.8em;
+  text-align: right;
+  color: var(--ink-muted);
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.article pre.code-block:not(.shiki) code {
+  padding-left: 0;
+}
+.article pre.code-block:not(.shiki) code::before {
+  display: none;
+}
+
+.article pre.code-block .code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  border-radius: 6px;
+  padding: 3px 8px;
+  transition: opacity 0.15s ease;
+}
+.article pre.code-block:hover .code-copy {
+  opacity: 1;
+}
+.article pre.code-block .code-copy:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.article .table-wrap {
+  margin: 1.5em 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.article table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.88em;
+  font-family: var(--font-sans);
+}
+.article th,
+.article td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.55em 0.9em;
+  text-align: left;
+  vertical-align: top;
+}
+.article th {
+  background: var(--bg-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.article tr:last-child td {
+  border-bottom: none;
+}
+
+.article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 1.4em auto;
+  cursor: zoom-in;
+  background: var(--bg-soft);
+}
+.article img.md-image {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.article .math {
+  font-family: var(--font-mono);
+}
+.article .math-block {
+  margin: 1.4em 0;
+  overflow-x: auto;
+  text-align: center;
+  font-size: 0.95em;
+}
+.article .katex-display {
+  margin: 1.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.article .katex {
+  font-size: 1.03em;
+}
+
+.article .footnotes {
+  margin-top: 3em;
+  padding-top: 1em;
+  border-top: 1px solid var(--line);
+  font-size: 0.82em;
+  color: var(--ink-soft);
+}
+.article .footnotes-sep {
+  display: none;
+}
+.article .footnotes ol {
+  padding-left: 1.4em;
+}
+.article .footnote-ref a {
+  text-decoration: none;
+  font-size: 0.78em;
+  vertical-align: super;
+  padding: 0 2px;
+}
+.article .footnote-backref {
+  text-decoration: none;
+  margin-left: 4px;
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------ 批注高亮 */
+
+mark.ann {
+  background: color-mix(in oklab, var(--ann-color, var(--yellow)) 46%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 1px 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+mark.ann:hover {
+  background: color-mix(in oklab, var(--ann-color, var(--yellow)) 66%, transparent);
+}
+mark.ann-yellow {
+  --ann-color: var(--yellow);
+}
+mark.ann-green {
+  --ann-color: var(--green);
+}
+mark.ann-blue {
+  --ann-color: var(--blue);
+}
+mark.ann-pink {
+  --ann-color: var(--pink);
+}
+mark.ann.ann-flash {
+  animation: annFlash 1.3s ease-out;
+}
+@keyframes annFlash {
+  0% {
+    background: color-mix(in oklab, var(--ann-color, var(--yellow)) 85%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ann-color, var(--yellow)) 45%, transparent);
+  }
+  100% {
+    background: color-mix(in oklab, var(--ann-color, var(--yellow)) 46%, transparent);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Shiki：保留其配色，背景透明交给主题 */
+.article pre.code-block.shiki,
+.article pre.code-block.shiki code,
+.article pre.code-block.shiki span {
+  background: transparent !important;
+}
+.article pre.code-block.shiki {
+  background: var(--code-bg);
+}
+
+:root[data-theme='dark'] .article pre.code-block.shiki span {
+  filter: brightness(1.08);
+}

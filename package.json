@@ -12,9 +12,9 @@
     "dev": "node scripts/dev.mjs",
     "dev:server": "node --watch packages/server/src/index.ts --no-open",
     "dev:web": "vite --config packages/web/vite.config.ts",
-    "build": "node scripts/build.mjs",
+    "build": "node packages/web/node_modules/vite/bin/vite.js build --config packages/web/vite.config.ts",
     "start": "node packages/server/src/index.ts",
-    "test": "node --test packages/server/test/ packages/web/test/",
+    "test": "node --test \"packages/server/test/*.test.ts\" \"packages/web/test/*.test.ts\"",
     "typecheck": "tsc -p packages/server/tsconfig.json && tsc -p packages/web/tsconfig.json"
   },
   "devDependencies": {

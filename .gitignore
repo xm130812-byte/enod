@@ -4,9 +4,12 @@ node_modules/
 # build output
 packages/web/dist/
 
-# local runtime state (index, run.json, snapshots, logs)
+# local runtime state (index, run.json, snapshots, logs, screenshots)
 .devdata/
 *.log
+
+# library trash
+sample-library/.trash/
 
 # OS
 .DS_Store

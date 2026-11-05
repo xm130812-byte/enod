@@ -1,0 +1,467 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DocStatus, DocSummary } from '../types.ts';
+import { useLibrary } from '../hooks/useLibrary.tsx';
+import { basename, dirOf, formatPercent, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
+import { Icon } from './Icons.tsx';
+import type { IconName } from './Icons.tsx';
+
+type StatusFilter = 'all' | DocStatus | 'inbox';
+type SortKey = 'recent' | 'added' | 'words' | 'title';
+type ViewMode = 'grid' | 'list' | 'tree' | 'tags';
+
+interface ShelfPageProps {
+  onOpenDoc: (id: string) => void;
+  onNewDoc: () => void;
+  onOpenSearch: () => void;
+  onOpenSettings: () => void;
+}
+
+const STATUS_TABS: { key: StatusFilter; label: string; icon: IconName }[] = [
+  { key: 'all', label: '全部', icon: 'book' },
+  { key: 'unread', label: '未读', icon: 'book' },
+  { key: 'reading', label: '在读', icon: 'book' },
+  { key: 'done', label: '已读', icon: 'check' },
+  { key: 'inbox', label: '收件箱', icon: 'inbox' },
+];
+
+function matchesFilter(doc: DocSummary, filter: StatusFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'inbox') return dirOf(doc.relPath).toLowerCase().startsWith('inbox');
+  return doc.status === filter;
+}
+
+function matchesQuery(doc: DocSummary, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return (
+    doc.title.toLowerCase().includes(q) ||
+    doc.aliases.some((a) => a.toLowerCase().includes(q)) ||
+    doc.tags.some((t) => t.toLowerCase().includes(q)) ||
+    doc.excerpt.toLowerCase().includes(q) ||
+    doc.relPath.toLowerCase().includes(q)
+  );
+}
+
+function sortDocs(docs: DocSummary[], sort: SortKey): DocSummary[] {
+  const list = docs.slice();
+  if (sort === 'title') return list.sort((a, b) => a.title.localeCompare(b.title, 'zh'));
+  if (sort === 'words') return list.sort((a, b) => b.words - a.words);
+  if (sort === 'added') {
+    return list.sort((a, b) => {
+      const am = a.created ? Date.parse(a.created) || 0 : a.mtime;
+      const bm = b.created ? Date.parse(b.created) || 0 : b.mtime;
+      return bm - am;
+    });
+  }
+  return list.sort((a, b) => b.mtime - a.mtime);
+}
+
+export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }: ShelfPageProps) {
+  const { docs, tags, info, loading, error, refresh, progress } = useLibrary();
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [sort, setSort] = useState<SortKey>('recent');
+  const [view, setView] = useState<ViewMode>('grid');
+  const [query, setQuery] = useState('');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [tagQuery, setTagQuery] = useState('');
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = { all: docs.length, unread: 0, reading: 0, done: 0, inbox: 0 };
+    for (const doc of docs) {
+      map[doc.status] = (map[doc.status] ?? 0) + 1;
+      if (dirOf(doc.relPath).toLowerCase().startsWith('inbox')) map.inbox = (map.inbox ?? 0) + 1;
+    }
+    return map;
+  }, [docs]);
+
+  const visible = useMemo(() => {
+    const filtered = docs.filter(
+      (doc) => matchesFilter(doc, status) && matchesQuery(doc, query) && (!activeTag || doc.tags.includes(activeTag)),
+    );
+    return sortDocs(filtered, sort);
+  }, [docs, status, query, activeTag, sort]);
+
+  const filteredTags = useMemo(
+    () => tags.filter((t) => !tagQuery || t.tag.toLowerCase().includes(tagQuery.toLowerCase())),
+    [tags, tagQuery],
+  );
+
+  const scanText = progress
+    ? progress.phase === 'walk'
+      ? '正在扫描目录…'
+      : progress.phase === 'index'
+        ? `正在索引 ${progress.done}/${progress.total}`
+        : progress.phase === 'links'
+          ? '正在解析双向链接…'
+          : '索引完成'
+    : null;
+
+  return (
+    <div className="shelf">
+      <header className="shelf-head">
+        <div className="brand">
+          <span className="brand-mark">
+            <Icon name="book" size={20} />
+          </span>
+          <div className="brand-text">
+            <strong>md-reader</strong>
+            <span className="brand-sub">
+              {info?.root ? basename(info.root) : '未挂载书库'} · {info?.stats.total ?? docs.length} 篇 ·{' '}
+              {formatWords(info?.stats.words ?? 0)}
+            </span>
+          </div>
+        </div>
+
+        <button className="search-trigger" onClick={onOpenSearch} title="全局搜索（Ctrl+K）">
+          <Icon name="search" size={17} />
+          <span>搜索标题、正文、批注…</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <div className="head-actions">
+          <button className="btn btn-primary" onClick={onNewDoc}>
+            <Icon name="plus" size={16} />
+            新建
+          </button>
+          <button className="icon-btn" onClick={onOpenSettings} title="设置">
+            <Icon name="settings" size={18} />
+          </button>
+        </div>
+      </header>
+
+      <div className="shelf-toolbar">
+        <nav className="tabs" aria-label="状态筛选">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              className={`tab ${status === tab.key ? 'active' : ''}`}
+              onClick={() => setStatus(tab.key)}
+            >
+              {tab.label}
+              <span className="tab-count">{counts[tab.key] ?? 0}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="toolbar-right">
+          <label className="inline-search">
+            <Icon name="search" size={15} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="筛选当前列表"
+              spellCheck={false}
+            />
+            {query && (
+              <button className="icon-btn tiny" onClick={() => setQuery('')} aria-label="清除">
+                <Icon name="close" size={13} />
+              </button>
+            )}
+          </label>
+
+          <select className="select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="排序">
+            <option value="recent">最近打开</option>
+            <option value="added">导入时间</option>
+            <option value="words">字数</option>
+            <option value="title">标题</option>
+          </select>
+
+          <div className="view-toggle" role="group" aria-label="视图">
+            <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title="书架">
+              <Icon name="grid" size={16} />
+            </button>
+            <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} title="列表">
+              <Icon name="list" size={16} />
+            </button>
+            <button className={view === 'tree' ? 'active' : ''} onClick={() => setView('tree')} title="目录">
+              <Icon name="tree" size={16} />
+            </button>
+            <button className={view === 'tags' ? 'active' : ''} onClick={() => setView('tags')} title="标签">
+              <Icon name="tag" size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {activeTag && (
+        <div className="active-filter">
+          <span>
+            标签：<strong>#{activeTag}</strong>
+          </span>
+          <button className="chip-clear" onClick={() => setActiveTag(null)}>
+            <Icon name="close" size={13} /> 清除
+          </button>
+        </div>
+      )}
+
+      {scanText && (
+        <div className="scan-banner">
+          <span className="scan-dot" />
+          {scanText}
+          {progress && progress.total > 0 && (
+            <span className="scan-bar">
+              <i style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} />
+            </span>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="error-banner">
+          <Icon name="alert" size={16} />
+          <span>{error}</span>
+          <button className="btn btn-ghost small" onClick={() => void refresh()}>
+            重试
+          </button>
+        </div>
+      )}
+
+      {loading && docs.length === 0 ? (
+        <ShelfSkeleton />
+      ) : docs.length === 0 ? (
+        <EmptyLibrary onNewDoc={onNewDoc} onOpenSettings={onOpenSettings} hasRoot={Boolean(info?.root)} />
+      ) : view === 'tags' ? (
+        <div className="shelf-scroll">
+          <div className="tag-panel">
+            <div className="tag-panel-head">
+              <h2>全部标签</h2>
+              <label className="inline-search">
+                <Icon name="search" size={15} />
+                <input value={tagQuery} onChange={(e) => setTagQuery(e.target.value)} placeholder="筛选标签" />
+              </label>
+            </div>
+            <div className="tag-cloud">
+              {filteredTags.map(({ tag, count }) => (
+                <button
+                  key={tag}
+                  className={`tag-card ${activeTag === tag ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTag(tag);
+                    setStatus('all');
+                    setView('grid');
+                  }}
+                >
+                  <span className="tag-name">#{tag}</span>
+                  <span className="tag-count">{count} 篇</span>
+                </button>
+              ))}
+              {filteredTags.length === 0 && <p className="muted">还没有标签。在文档 frontmatter 里写 `tags: [历史]` 就会出现在这里。</p>}
+            </div>
+          </div>
+        </div>
+      ) : view === 'tree' ? (
+        <DirectoryView docs={visible} onOpenDoc={onOpenDoc} />
+      ) : view === 'list' ? (
+        <div className="shelf-scroll">
+          <div className="doc-list">
+            {visible.map((doc) => (
+              <ListRow key={doc.id} doc={doc} onClick={() => onOpenDoc(doc.id)} />
+            ))}
+            {visible.length === 0 && <p className="muted pad">没有匹配的文档。</p>}
+          </div>
+        </div>
+      ) : (
+        <VirtualDocGrid docs={visible} onOpenDoc={onOpenDoc} />
+      )}
+    </div>
+  );
+}
+
+function ShelfSkeleton() {
+  return (
+    <div className="shelf-scroll">
+      <div className="doc-grid skeleton-grid">
+        {Array.from({ length: 9 }).map((_, i) => (
+          <div key={i} className="doc-card skeleton">
+            <div className="sk-line short" />
+            <div className="sk-line" />
+            <div className="sk-line" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyLibrary({
+  onNewDoc,
+  onOpenSettings,
+  hasRoot,
+}: {
+  onNewDoc: () => void;
+  onOpenSettings: () => void;
+  hasRoot: boolean;
+}) {
+  return (
+    <div className="empty">
+      <div className="empty-mark">
+        <Icon name="book" size={40} />
+      </div>
+      <h2>{hasRoot ? '书库还是空的' : '还没有挂载书库'}</h2>
+      <p>
+        {hasRoot
+          ? '把已有的 .md 文件放进书库目录，或者先写一篇。'
+          : '选择一个存放 Markdown 的目录，md-reader 会建立索引。'}
+      </p>
+      <div className="empty-actions">
+        <button className="btn btn-primary" onClick={onNewDoc}>
+          <Icon name="plus" size={16} />
+          新建第一篇
+        </button>
+        <button className="btn btn-ghost" onClick={onOpenSettings}>
+          设置书库路径
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DocCard({ doc, onClick }: { doc: DocSummary; onClick: () => void }) {
+  return (
+    <button className="doc-card" onClick={onClick} title={doc.title}>
+      <div className="card-top">
+        <span className={`status-pill status-${doc.status}`}>
+          <span className="status-dot" />
+          {statusLabel(doc.status)}
+        </span>
+        <span className="card-time">{formatRelativeTime(doc.mtime)}</span>
+      </div>
+      <h3 className="card-title">{doc.title}</h3>
+      <p className="card-excerpt">{doc.excerpt || '（空文档）'}</p>
+      <div className="card-foot">
+        <div className="card-tags">
+          {doc.tags.slice(0, 3).map((tag) => (
+            <span key={tag} className="tag">
+              #{tag}
+            </span>
+          ))}
+          {doc.tags.length > 3 && <span className="tag more">+{doc.tags.length - 3}</span>}
+        </div>
+        <span className="card-meta">
+          {formatWords(doc.words)}
+          {doc.annCount > 0 && (
+            <span className="ann-count">
+              <Icon name="note" size={12} />
+              {doc.annCount}
+            </span>
+          )}
+        </span>
+      </div>
+      {doc.progress > 0 && doc.progress < 1 && (
+        <span className="card-progress" aria-hidden="true">
+          <i style={{ width: formatPercent(doc.progress) }} />
+        </span>
+      )}
+      {doc.progress >= 1 && <span className="card-done" aria-hidden="true" />}
+    </button>
+  );
+}
+
+function ListRow({ doc, onClick }: { doc: DocSummary; onClick: () => void }) {
+  return (
+    <button className="list-row" onClick={onClick}>
+      <span className={`status-dot status-${doc.status}`} />
+      <span className="list-title">{doc.title}</span>
+      <span className="list-path">{doc.relPath}</span>
+      <span className="list-tags">
+        {doc.tags.slice(0, 2).map((t) => (
+          <span key={t} className="tag">
+            #{t}
+          </span>
+        ))}
+      </span>
+      <span className="list-words">{formatWords(doc.words)}</span>
+      <span className="list-time">{formatRelativeTime(doc.mtime)}</span>
+    </button>
+  );
+}
+
+function VirtualDocGrid({ docs, onOpenDoc }: { docs: DocSummary[]; onOpenDoc: (id: string) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState({ cols: 3, viewport: 800, scrollTop: 0 });
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const cols = Math.max(1, Math.min(6, Math.floor((el.clientWidth - 8) / 296)));
+      setLayout((prev) => ({ ...prev, cols, viewport: el.clientHeight }));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    const onScroll = () => setLayout((prev) => ({ ...prev, scrollTop: el.scrollTop }));
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  const rowHeight = 228;
+  const gap = 18;
+  const totalRows = Math.ceil(docs.length / layout.cols);
+  const startRow = Math.max(0, Math.floor(layout.scrollTop / rowHeight) - 2);
+  const endRow = Math.min(totalRows, Math.ceil((layout.scrollTop + layout.viewport) / rowHeight) + 2);
+  const slice = docs.slice(startRow * layout.cols, endRow * layout.cols);
+  const paddingTop = startRow * rowHeight;
+  const paddingBottom = Math.max(0, (totalRows - endRow) * rowHeight) + 32;
+
+  return (
+    <div className="shelf-scroll" ref={scrollRef}>
+      <div
+        className="doc-grid"
+        style={{
+          gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
+          gap: `${gap}px`,
+          paddingTop,
+          paddingBottom,
+        }}
+      >
+        {slice.map((doc) => (
+          <DocCard key={doc.id} doc={doc} onClick={() => onOpenDoc(doc.id)} />
+        ))}
+      </div>
+      {docs.length === 0 && <p className="muted pad">没有匹配的文档。</p>}
+    </div>
+  );
+}
+
+function DirectoryView({ docs, onOpenDoc }: { docs: DocSummary[]; onOpenDoc: (id: string) => void }) {
+  const groups = useMemo(() => {
+    const map = new Map<string, DocSummary[]>();
+    for (const doc of docs) {
+      const dir = dirOf(doc.relPath) || '（根目录）';
+      const arr = map.get(dir) ?? [];
+      arr.push(doc);
+      map.set(dir, arr);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'zh'));
+  }, [docs]);
+
+  return (
+    <div className="shelf-scroll">
+      <div className="tree">
+        {groups.map(([dir, items]) => (
+          <details key={dir} open className="tree-group">
+            <summary>
+              <Icon name="folder" size={16} />
+              <span>{dir}</span>
+              <span className="tree-count">{items.length}</span>
+            </summary>
+            <div className="tree-items">
+              {items.map((doc) => (
+                <button key={doc.id} className="tree-item" onClick={() => onOpenDoc(doc.id)}>
+                  <span className={`status-dot status-${doc.status}`} />
+                  <span className="tree-item-title">{doc.title}</span>
+                  <span className="tree-item-meta">{formatWords(doc.words)}</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        ))}
+        {groups.length === 0 && <p className="muted pad">没有匹配的文档。</p>}
+      </div>
+    </div>
+  );
+}
