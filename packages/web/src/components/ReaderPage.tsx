@@ -611,6 +611,9 @@ export function ReaderPage({
         if (heading.getBoundingClientRect().top - containerTop <= 150) current = heading.id;
         else break;
       }
+      // 滚到底时最后一节可能永远到不了顶部阈值，强制选中最后一个标题
+      const atBottom = max > 0 && el.scrollHeight - el.scrollTop - el.clientHeight <= 4;
+      if (atBottom && headings.length > 0) current = headings[headings.length - 1]!.id;
       setActiveHeading(current);
       onActiveChangeRef.current?.(current);
     });

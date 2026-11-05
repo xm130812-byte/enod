@@ -197,6 +197,25 @@ await evaluate(`document.querySelectorAll('.simple-toc .toc-item')[4]?.click(); 
 await sleep(1000);
 const scrollAfter = await evaluate(`document.querySelector('.reader-scroll')?.scrollTop ?? 0`);
 check('点击目录项可跳转', scrollAfter > scrollBefore, `${scrollBefore} -> ${scrollAfter}`);
+await evaluate(`(() => {
+  const el = document.querySelector('.reader-scroll');
+  el.scrollTop = el.scrollHeight;
+  el.dispatchEvent(new Event('scroll', { bubbles: true }));
+  return 'bottom';
+})()`);
+await sleep(800);
+const bottomToc = await evaluate(`(() => {
+  const items = [...document.querySelectorAll('.simple-toc .toc-item')];
+  return {
+    last: items[items.length - 1]?.textContent ?? '',
+    active: document.querySelector('.simple-toc .toc-item.active')?.textContent ?? '',
+  };
+})()`);
+check(
+  '滚到底时目录高亮最后一节',
+  bottomToc.last !== '' && bottomToc.active === bottomToc.last,
+  `last=${bottomToc.last} active=${bottomToc.active}`,
+);
 await evaluate(`[...document.querySelectorAll('.simple-tabs button')].find((b) => b.textContent.includes('文件夹'))?.click(); 'files'`);
 await sleep(400);
 check('可切回「文件夹」tab', (await evaluate(`!!document.querySelector('.simple-folder')`)) === true);
