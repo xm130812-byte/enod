@@ -4,7 +4,7 @@
 
 本地优先：文件就是数据库。元数据、批注、链接全部写在 Markdown 的 frontmatter 与正文里，同步交给坚果云 / WebDAV / Git 即可。
 
-> 当前状态：**初版可运行**（M1 骨架 + P0 写作 / 批注 / 双链 / 搜索）。剪藏（M5）与安装包（M1.5）尚未实现，见文末「已知限制」。
+> 当前状态：**初版可运行**（M1 骨架 + P0 写作 / 批注 / 双链 / 搜索）。剪藏（M5）未实现；打包已跑通 SEA 便携版，Tauri 托盘/安装包受工具链阻塞，见 [docs/PACKAGING.md](docs/PACKAGING.md)。
 > 需求基线：[PRD-v3](../PRD-v3.md)。
 
 ![一页](docs/screenshots/simple.png)
@@ -26,7 +26,7 @@
 | 文件操作 | ✅ | 新建、重命名、移动（同步更新 `[[链接]]`）、删除到 `.trash/`、占位图片上传、拖入 `.md` 导入 |
 | 实时 | ✅ | SSE：索引进度、外部改动、删除、配置变更；前端静默刷新 |
 | 剪藏 | ⛔ | `POST /clip` 返回 501（P1） |
-| 安装包 | ⛔ | Tauri 壳 + Node SEA 未做（M1.5） |
+| 安装包 | ⛔ | SEA sidecar 已验证（`dist/sea/md-reader.exe`）；Tauri 壳需要 Rust + MSVC，见 [docs/PACKAGING.md](docs/PACKAGING.md) |
 
 ### 界面
 
@@ -140,6 +140,21 @@ pnpm dev            # 守护进程 :37123 + Vite :5173（带 /api 代理）
 ```
 
 打开 <http://localhost:5173>。开发数据在项目根的 `.devdata/`（已 gitignore）。
+
+### 打包（便携版 sidecar）
+
+```powershell
+pnpm build
+pnpm package        # → dist/sea/md-reader.exe + web/ + md-reader.cmd
+```
+
+双击 `dist/sea/md-reader.cmd`，或在命令行：
+
+```powershell
+dist\sea\md-reader.exe --no-open --port 0 --data-dir dist\sea\testdata
+```
+
+SEA 产物不依赖系统 Node，已实测健康检查、静态页面、索引与搜索。托盘与安装包需要 Tauri + Rust + MSVC，步骤与阻塞见 [docs/PACKAGING.md](docs/PACKAGING.md)。
 
 ### 测试
 
@@ -297,7 +312,7 @@ Chrome (web UI)  ──HTTP / SSE──▶  Node 守护进程 127.0.0.1:<随机�
 | 项 | 现状 | 计划 |
 |---|---|---|
 | 剪藏 | API 501，界面无入口 | M5：Readability + turndown + 图片本地化 |
-| 打包 | 无安装包 / 托盘 | M1.5：Tauri 壳 + SEA sidecar（PRD 建议尽早做） |
+| 打包 | SEA 便携版已验证；无托盘 / 安装包 | Tauri 壳 + NSIS 安装包，需要 Rust + MSVC，见 [docs/PACKAGING.md](docs/PACKAGING.md) |
 | 逐行合并 | 冲突对话框里的**手动合并面板**（磁盘版 / 我的版 / 可编辑结果），非自动 diff3 | 后续接 `@codemirror/merge` 或自研 hunk |
 | 文内查找 | 用 Chrome 原生 `Ctrl+F` | 自定义高亮跳转 |
 | 批量移动 | 批量改状态 / 打标签已做，批量移动目录未做 | 复用移动对话框 |

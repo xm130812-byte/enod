@@ -3,6 +3,7 @@ node_modules/
 
 # build output
 packages/web/dist/
+dist/
 
 # local runtime state (index, run.json, snapshots, logs, screenshots)
 .devdata/

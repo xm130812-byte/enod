@@ -78,8 +78,20 @@ async function main(): Promise<void> {
   await service.init();
   log(`书库：${service.root ?? '(未挂载)'}`);
 
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const webDist = path.resolve(here, '../../web/dist');
+  const here = (() => {
+    try {
+      return path.dirname(fileURLToPath(import.meta.url));
+    } catch {
+      return process.cwd();
+    }
+  })();
+  const execDir = path.dirname(process.execPath);
+  const packaged = !/^node(\.exe)?$/i.test(path.basename(process.execPath));
+  const webDist = process.env.READER_WEB_DIST
+    ? path.resolve(process.env.READER_WEB_DIST)
+    : packaged
+      ? path.join(execDir, 'web')
+      : path.resolve(here, '../../web/dist');
   const hasDist = fs.existsSync(path.join(webDist, 'index.html'));
 
   const desiredPort = Number(argValue('--port') ?? process.env.READER_PORT ?? previous?.port ?? 0) || 0;
