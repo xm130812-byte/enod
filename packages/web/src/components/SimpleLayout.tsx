@@ -5,6 +5,7 @@ import { useLibrary } from '../hooks/useLibrary.tsx';
 import { dirOf, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
 import { ReaderPage } from './ReaderPage.tsx';
+import type { TocItem } from './Toc.tsx';
 
 interface FileNode {
   name: string;
@@ -97,7 +98,27 @@ export function SimpleLayout({
   const { docs, info, loading } = useLibrary();
   const tree = useMemo(() => buildFileTree(info?.dirs ?? [], docs), [info?.dirs, docs]);
   const [expanded, setExpanded] = useState<Set<string>>(() => readExpanded() ?? new Set(['']));
+  const [sideTab, setSideTab] = useState<'files' | 'toc'>(() => {
+    try {
+      return localStorage.getItem('mr.simple.side') === 'toc' ? 'toc' : 'files';
+    } catch {
+      return 'files';
+    }
+  });
+  const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const initialized = useRef(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mr.simple.side', sideTab);
+    } catch {
+      /* ignore */
+    }
+  }, [sideTab]);
+
+  useEffect(() => {
+    setTocItems([]);
+  }, [docId]);
 
   useEffect(() => {
     if (initialized.current || tree.folders.length === 0) return;
@@ -185,6 +206,18 @@ export function SimpleLayout({
 
   const recent = docs.slice(0, 5);
 
+  const jumpToHeading = (slug: string): void => {
+    const root = document.querySelector('.simple-main');
+    if (!root) return;
+    const byId = root.querySelector<HTMLElement>(`.article [id="${CSS.escape(slug)}"]`);
+    const target =
+      byId ??
+      [...root.querySelectorAll<HTMLElement>('.article h1, .article h2, .article h3')].find(
+        (heading) => (heading.textContent ?? '').trim() === slug,
+      );
+    target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
   return (
     <div className="simple">
       <aside className="simple-side">
@@ -205,30 +238,65 @@ export function SimpleLayout({
           </button>
         </div>
 
-        <div className="simple-tree">
-          {loading && docs.length === 0 ? (
-            <p className="muted small pad">加载中…</p>
-          ) : (
-            <>
-              {tree.files.length > 0 && (
-                <div className="simple-root-files">
-                  {tree.files.map((doc) => (
-                    <button
-                      key={doc.id}
-                      className={`simple-file ${doc.id === docId ? 'active' : ''}`}
-                      style={{ paddingLeft: 22 }}
-                      onClick={() => onOpenDoc(doc.id)}
-                    >
-                      <span className={`status-dot status-${doc.status}`} />
-                      <span className="simple-file-title">{doc.title}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {tree.folders.map(renderFolder)}
-            </>
-          )}
+        <div className="simple-tabs" role="tablist">
+          <button
+            role="tab"
+            className={sideTab === 'files' ? 'active' : ''}
+            onClick={() => setSideTab('files')}
+          >
+            <Icon name="folder" size={13} />
+            文件夹
+          </button>
+          <button role="tab" className={sideTab === 'toc' ? 'active' : ''} onClick={() => setSideTab('toc')}>
+            <Icon name="list" size={13} />
+            目录
+          </button>
         </div>
+
+        {sideTab === 'files' ? (
+          <div className="simple-tree">
+            {loading && docs.length === 0 ? (
+              <p className="muted small pad">加载中…</p>
+            ) : (
+              <>
+                {tree.files.length > 0 && (
+                  <div className="simple-root-files">
+                    {tree.files.map((doc) => (
+                      <button
+                        key={doc.id}
+                        className={`simple-file ${doc.id === docId ? 'active' : ''}`}
+                        style={{ paddingLeft: 22 }}
+                        onClick={() => onOpenDoc(doc.id)}
+                      >
+                        <span className={`status-dot status-${doc.status}`} />
+                        <span className="simple-file-title">{doc.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {tree.folders.map(renderFolder)}
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="simple-tree simple-toc">
+            {!docId ? (
+              <p className="muted small pad">选择一篇文章后显示目录</p>
+            ) : tocItems.length === 0 ? (
+              <p className="muted small pad">这篇文档还没有标题</p>
+            ) : (
+              tocItems.map((item) => (
+                <button
+                  key={item.id}
+                  className={`toc-item level-${item.level}`}
+                  onClick={() => jumpToHeading(item.id)}
+                >
+                  {item.text}
+                </button>
+              ))
+            )}
+          </div>
+        )}
 
         <div className="simple-foot">
           <button className="btn btn-primary small" onClick={onNewDoc}>
@@ -250,6 +318,7 @@ export function SimpleLayout({
             key={docId}
             docId={docId}
             simple
+            onTocChange={setTocItems}
             onBack={() => {
               window.location.hash = '#/';
             }}

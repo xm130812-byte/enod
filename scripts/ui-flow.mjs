@@ -184,12 +184,22 @@ const simple = await evaluate(`JSON.stringify({
 const simpleState = JSON.parse(simple);
 check('简单视图渲染（文件树 + 文章）', simpleState.simple && simpleState.tree && simpleState.article);
 check('简单视图没有状态导航', simpleState.statusSelect === false);
-await evaluate(`[...document.querySelectorAll('.reader-actions .icon-btn')].find((b) => b.title === '目录')?.click(); 'toc'`);
+
+// 用有多级标题的样例文档验证「左侧目录」切换
+await evaluate(`location.hash = '#/doc/01M6PEGRCN1EKDDN8MCEYVHY88'; 'nav'`);
+await sleep(1900);
+await evaluate(`[...document.querySelectorAll('.simple-tabs button')].find((b) => b.textContent.includes('目录'))?.click(); 'toc'`);
+await sleep(600);
+const tocCount = await evaluate(`document.querySelectorAll('.simple-toc .toc-item').length`);
+check('左侧「目录」tab 展示标题', tocCount >= 5, `items=${tocCount}`);
+const scrollBefore = await evaluate(`document.querySelector('.reader-scroll')?.scrollTop ?? 0`);
+await evaluate(`document.querySelectorAll('.simple-toc .toc-item')[4]?.click(); 'jump'`);
+await sleep(1000);
+const scrollAfter = await evaluate(`document.querySelector('.reader-scroll')?.scrollTop ?? 0`);
+check('点击目录项可跳转', scrollAfter > scrollBefore, `${scrollBefore} -> ${scrollAfter}`);
+await evaluate(`[...document.querySelectorAll('.simple-tabs button')].find((b) => b.textContent.includes('文件夹'))?.click(); 'files'`);
 await sleep(400);
-check('目录以浮层展示', await evaluate(`!!document.querySelector('.toc-float')`));
-await evaluate(`document.querySelector('.toc-float .icon-btn')?.click(); 'close'`);
-await sleep(200);
-check('目录浮层可关闭', (await evaluate(`!document.querySelector('.toc-float')`)) === true);
+check('可切回「文件夹」tab', (await evaluate(`!!document.querySelector('.simple-folder')`)) === true);
 
 // 清理
 await api('DELETE', `/api/v1/docs/${created.id}`);

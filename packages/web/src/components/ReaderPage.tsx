@@ -32,6 +32,7 @@ interface ReaderPageProps {
   onOpenDoc: (id: string) => void;
   simple?: boolean;
   onSwitchMode?: () => void;
+  onTocChange?: (items: TocItem[]) => void;
 }
 
 type PanelTab = 'notes' | 'backlinks' | 'mentions' | 'links';
@@ -45,7 +46,7 @@ const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
 
 const scrollMemory = new Map<string, number>();
 
-export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchMode }: ReaderPageProps) {
+export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchMode, onTocChange }: ReaderPageProps) {
   const { config, info, docs, resolveWiki, refreshDocs, applyConfig } = useLibrary();
   const { toast } = useToast();
 
@@ -58,12 +59,13 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
   const [conflict, setConflict] = useState<ConflictDetail | null>(null);
   const [externalChanged, setExternalChanged] = useState(false);
   const [toc, setToc] = useState<TocItem[]>([]);
+  const onTocChangeRef = useRef(onTocChange);
+  onTocChangeRef.current = onTocChange;
   const [activeHeading, setActiveHeading] = useState<string | null>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
   const [panelTab, setPanelTab] = useState<PanelTab>('notes');
   const [panelOpen, setPanelOpen] = useState(true);
-  const [tocOpen, setTocOpen] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
@@ -743,15 +745,6 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
               <Icon name="sidebar" size={18} />
             </button>
           )}
-          {simple && (
-            <button
-              className={`icon-btn ${tocOpen ? 'active' : ''}`}
-              onClick={() => setTocOpen((v) => !v)}
-              title="目录"
-            >
-              <Icon name="list" size={17} />
-            </button>
-          )}
           <button
             className={`icon-btn ${immersive ? 'active' : ''}`}
             onClick={() => setImmersive((v) => !v)}
@@ -806,35 +799,6 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
         </div>
       </header>
 
-      {simple && tocOpen && (
-        <div className="toc-float" onMouseLeave={() => setTocOpen(false)}>
-          <div className="toc-float-head">
-            <span>目录</span>
-            <button className="icon-btn tiny" onClick={() => setTocOpen(false)} aria-label="关闭目录">
-              <Icon name="close" size={13} />
-            </button>
-          </div>
-          <div className="toc-float-body">
-            {toc.length === 0 ? (
-              <p className="muted small">这篇文档还没有标题</p>
-            ) : (
-              toc.map((item) => (
-                <button
-                  key={item.id}
-                  className={`toc-item level-${item.level} ${activeHeading === item.id ? 'active' : ''}`}
-                  onClick={() => {
-                    articleRef.current?.scrollToHeading(item.id);
-                    setTocOpen(false);
-                  }}
-                >
-                  {item.text}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       <div className="progress-line" aria-hidden="true">
         <i style={{ width: formatPercent(progress) }} />
       </div>
@@ -874,7 +838,10 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
                   resolveWiki={resolveWiki}
                   onNavigateWiki={handleWikiNavigate}
                   onAnnotationClick={jumpToAnnotation}
-                  onToc={setToc}
+                  onToc={(items) => {
+                    setToc(items);
+                    onTocChangeRef.current?.(items);
+                  }}
                   onAnchors={({ orphaned }) => setOrphans(orphaned)}
                   onImage={(src, alt) => setLightbox({ src, alt })}
                 />
