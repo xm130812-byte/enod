@@ -1,39 +1,31 @@
-import type { Highlighter } from 'shiki';
+import type { HighlighterCore } from 'shiki/core';
 
-const LANGS = [
-  'javascript',
-  'typescript',
-  'tsx',
-  'jsx',
-  'json',
-  'bash',
-  'shell',
-  'powershell',
-  'python',
-  'rust',
-  'html',
-  'css',
-  'sql',
-  'markdown',
-  'yaml',
-  'diff',
-  'go',
-  'java',
-  'c',
-  'csharp',
-];
+/** 代码块围栏里常见的缩写 / 别名 → Shiki 语言 id */
+const LANG_ALIAS: Record<string, string> = {
+  js: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  ts: 'typescript',
+  sh: 'bash',
+  shell: 'bash',
+  zsh: 'bash',
+  ps1: 'powershell',
+  pwsh: 'powershell',
+  py: 'python',
+  rs: 'rust',
+  yml: 'yaml',
+  md: 'markdown',
+  golang: 'go',
+  'c#': 'csharp',
+  cs: 'csharp',
+};
 
-let highlighterPromise: Promise<Highlighter> | null = null;
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
-function getHighlighter(): Promise<Highlighter> {
+function getHighlighter(): Promise<HighlighterCore> {
   if (!highlighterPromise) {
-    // 动态 import，让 Shiki 单独成一个 chunk
-    highlighterPromise = import('shiki').then((mod) =>
-      mod.createHighlighter({
-        themes: ['github-light', 'github-dark'],
-        langs: LANGS,
-      }),
-    );
+    // 动态 import：语法包 / wasm 单独成 chunk，只有出现代码块时才下载。
+    highlighterPromise = import('./highlight-shiki').then((mod) => mod.createHighlighter());
   }
   return highlighterPromise;
 }
@@ -62,7 +54,7 @@ export async function highlightCodeBlocks(root: HTMLElement, theme: 'light' | 'd
   const pres = [...root.querySelectorAll<HTMLElement>('pre.code-block')];
   if (pres.length === 0) return;
 
-  let highlighter: Highlighter;
+  let highlighter: HighlighterCore;
   try {
     highlighter = await getHighlighter();
   } catch (error) {
@@ -71,13 +63,15 @@ export async function highlightCodeBlocks(root: HTMLElement, theme: 'light' | 'd
     return;
   }
 
+  const loaded = new Set(highlighter.getLoadedLanguages());
   for (const pre of pres) {
     const code = pre.querySelector('code');
     if (!code) continue;
     const declared = pre.dataset.lang ?? '';
     const fromClass = /language-([\w+#-]+)/.exec(code.className)?.[1] ?? '';
-    const lang = (declared || fromClass).toLowerCase().replace(/^language-/, '');
-    if (!lang) {
+    const raw = (declared || fromClass).toLowerCase().replace(/^language-/, '');
+    const lang = LANG_ALIAS[raw] ?? raw;
+    if (!lang || !loaded.has(lang)) {
       addCopyButton(pre);
       continue;
     }

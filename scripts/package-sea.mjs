@@ -8,7 +8,7 @@
  * 用法：node scripts/package-sea.mjs
  */
 import { build } from 'esbuild';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -22,6 +22,24 @@ const fuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 
 function log(message) {
   console.log(`[sea] ${message}`);
+}
+
+/** 找 UPX：显式 UPX_BIN > tools/upx/**\/upx.exe；NO_UPX=1 可跳过压缩 */
+function findUpx() {
+  if (process.env.NO_UPX === '1') return null;
+  if (process.env.UPX_BIN) return fs.existsSync(process.env.UPX_BIN) ? process.env.UPX_BIN : null;
+  const base = path.join(root, 'tools', 'upx');
+  if (!fs.existsSync(base)) return null;
+  const stack = [base];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else if (entry.name.toLowerCase() === 'upx.exe') return full;
+    }
+  }
+  return null;
 }
 
 async function main() {
@@ -76,8 +94,40 @@ async function main() {
   ].join('\r\n');
   await fsp.writeFile(path.join(out, 'md-reader.cmd'), launcher, 'utf8');
 
-  const size = (await fsp.stat(exe)).size;
-  log(`完成：${exe}（${(size / 1024 / 1024).toFixed(1)} MB）`);
+  // 清理打包中间产物，发布目录只留 exe / web / 启动器
+  for (const name of ['server.cjs', 'sea-prep.blob', 'sea-config.json']) {
+    await fsp.rm(path.join(out, name), { force: true });
+  }
+
+  const rawSize = (await fsp.stat(exe)).size;
+  let finalSize = rawSize;
+  const upx = findUpx();
+  if (upx) {
+    log('UPX 压缩 exe（LZMA，约 90MB → 23MB）');
+    try {
+      execFileSync(upx, ['--lzma', '--best', exe], { cwd: root, stdio: 'inherit' });
+      finalSize = (await fsp.stat(exe)).size;
+    } catch (error) {
+      log(`UPX 压缩失败，保留未压缩 exe：${error.message}`);
+    }
+  } else {
+    log('未找到 UPX，跳过压缩（pnpm upx:fetch 可下载；NO_UPX=1 可显式跳过）');
+  }
+
+  const webSize = (await fsp.readdir(path.join(out, 'web'), { recursive: true }))
+    .map((rel) => {
+      try {
+        return fs.statSync(path.join(out, 'web', rel)).size;
+      } catch {
+        return 0;
+      }
+    })
+    .reduce((a, b) => a + b, 0);
+
+  log(`完成：${exe}`);
+  log(`  exe：${(finalSize / 1024 / 1024).toFixed(1)} MB（压缩前 ${(rawSize / 1024 / 1024).toFixed(1)} MB）`);
+  log(`  web：${(webSize / 1024 / 1024).toFixed(1)} MB`);
+  log(`  合计：${((finalSize + webSize) / 1024 / 1024).toFixed(1)} MB`);
   log(`前端：${path.join(out, 'web')}`);
   log('试运行：dist\\sea\\md-reader.exe --no-open --port 0 --data-dir <临时目录>');
 }

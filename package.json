@@ -14,6 +14,7 @@
     "dev:web": "vite --config packages/web/vite.config.ts",
     "build": "node packages/web/node_modules/vite/bin/vite.js build --config packages/web/vite.config.ts",
     "package": "node scripts/package-sea.mjs",
+    "upx:fetch": "node scripts/fetch-upx.mjs",
     "start": "node packages/server/src/index.ts",
     "test": "node --test \"packages/server/test/*.test.ts\" \"packages/web/test/*.test.ts\"",
     "typecheck": "tsc -p packages/server/tsconfig.json && tsc -p packages/web/tsconfig.json"

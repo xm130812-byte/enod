@@ -19,4 +19,7 @@ Thumbs.db
 # env
 .env.local
 
+# vendored tools (UPX 等，按需 pnpm upx:fetch 下载)
+tools/
+
 sample-library/temp/

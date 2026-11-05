@@ -144,9 +144,12 @@ pnpm dev            # 守护进程 :37123 + Vite :5173（带 /api 代理）
 ### 打包（便携版 sidecar）
 
 ```powershell
+pnpm upx:fetch      # 可选：下载 UPX；不装则输出未压缩版
 pnpm build
 pnpm package        # → dist/sea/md-reader.exe + web/ + md-reader.cmd
 ```
+
+发布目录约 **26.6 MB**：exe 22.4 MB（UPX LZMA，压缩前 90.3 MB）+ 前端 4.2 MB。体积优化细节见 [docs/PACKAGING.md](docs/PACKAGING.md#2-体积是怎么压下来的)。
 
 双击 `dist/sea/md-reader.cmd`，或在命令行：
 
@@ -154,7 +157,7 @@ pnpm package        # → dist/sea/md-reader.exe + web/ + md-reader.cmd
 dist\sea\md-reader.exe --no-open --port 0 --data-dir dist\sea\testdata
 ```
 
-SEA 产物不依赖系统 Node，已实测健康检查、静态页面、索引与搜索。托盘与安装包需要 Tauri + Rust + MSVC，步骤与阻塞见 [docs/PACKAGING.md](docs/PACKAGING.md)。
+SEA 产物不依赖系统 Node，已实测健康检查、静态页面、索引、搜索与代码高亮。托盘与安装包需要 Tauri + Rust + MSVC，步骤与阻塞见 [docs/PACKAGING.md](docs/PACKAGING.md)。
 
 ### 测试
 
@@ -312,7 +315,7 @@ Chrome (web UI)  ──HTTP / SSE──▶  Node 守护进程 127.0.0.1:<随机�
 | 项 | 现状 | 计划 |
 |---|---|---|
 | 剪藏 | API 501，界面无入口 | M5：Readability + turndown + 图片本地化 |
-| 打包 | SEA 便携版已验证；无托盘 / 安装包 | Tauri 壳 + NSIS 安装包，需要 Rust + MSVC，见 [docs/PACKAGING.md](docs/PACKAGING.md) |
+| 打包 | SEA 便携版已验证（26.6 MB）；无托盘 / 安装包 | Tauri 壳 + NSIS 安装包，需要 Rust + MSVC，见 [docs/PACKAGING.md](docs/PACKAGING.md) |
 | 逐行合并 | 冲突对话框里的**手动合并面板**（磁盘版 / 我的版 / 可编辑结果），非自动 diff3 | 后续接 `@codemirror/merge` 或自研 hunk |
 | 文内查找 | 用 Chrome 原生 `Ctrl+F` | 自定义高亮跳转 |
 | 批量移动 | 批量改状态 / 打标签已做，批量移动目录未做 | 复用移动对话框 |
