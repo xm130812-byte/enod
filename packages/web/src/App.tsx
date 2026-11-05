@@ -209,6 +209,7 @@ function Shell() {
           onBack={backToShelf}
           onOpenDoc={openDoc}
           onSwitchMode={() => switchMode('simple')}
+          onOpenSearch={() => setSearchOpen(true)}
         />
       ) : (
         <ShelfPage

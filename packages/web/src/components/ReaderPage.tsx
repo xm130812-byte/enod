@@ -35,6 +35,7 @@ interface ReaderPageProps {
   onSwitchMode?: () => void;
   onTocChange?: (items: TocItem[]) => void;
   onActiveChange?: (id: string | null) => void;
+  onOpenSearch?: () => void;
 }
 
 type PanelTab = 'notes' | 'backlinks' | 'mentions' | 'links';
@@ -56,6 +57,7 @@ export function ReaderPage({
   onSwitchMode,
   onTocChange,
   onActiveChange,
+  onOpenSearch,
 }: ReaderPageProps) {
   const { config, info, docs, resolveWiki, refreshDocs, applyConfig } = useLibrary();
   const { toast } = useToast();
@@ -374,19 +376,6 @@ export function ReaderPage({
     setFindIndex(0);
     const container = scrollRef.current?.querySelector<HTMLElement>('.article');
     if (container) clearFindMatches(container);
-  };
-
-  const toggleFind = (): void => {
-    if (findOpen) {
-      closeFind();
-      return;
-    }
-    if (modeRef.current === 'edit') return;
-    setFindOpen(true);
-    window.setTimeout(() => {
-      findInputRef.current?.focus();
-      findInputRef.current?.select();
-    }, 30);
   };
 
   const stepFind = (delta: number): void => {
@@ -787,9 +776,12 @@ export function ReaderPage({
         <div className="reader-actions">
           {mode === 'read' && (
             <button
-              className={`icon-btn ${findOpen ? 'active' : ''}`}
-              onClick={toggleFind}
-              title="文内查找（Ctrl+F）"
+              className="icon-btn"
+              onClick={() => {
+                if (findOpen) closeFind();
+                onOpenSearch?.();
+              }}
+              title="搜索书库（Ctrl+K）"
             >
               <Icon name="search" size={17} />
             </button>

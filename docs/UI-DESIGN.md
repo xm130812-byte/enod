@@ -114,8 +114,8 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 
 ### 3.0.1 文内查找
 
-- 入口：阅读页顶栏放大镜，或 `Ctrl/Cmd+F`。
-- 浮条位于顶栏下方右侧：输入框 + `当前/总数` + 上一个/下一个 + 关闭；0 命中时计数用 `--danger`。
+- 入口：`Ctrl/Cmd+F`（阅读页右上角放大镜是**全局搜索** `Ctrl+K` 的入口）。
+- 浮条位于正文区域右上：输入框 + `当前/总数` + 上一个/下一个 + 关闭；0 命中时计数用 `--danger`。
 - 命中用半透明黄底，当前命中用强调色底；`Enter` / `Shift+Enter` 循环跳转，`Esc` 关闭并清理自己的 mark，不影响批注 mark。
 - 与全局搜索（`Ctrl+K`）分开：文内查找只作用于当前文章。
 

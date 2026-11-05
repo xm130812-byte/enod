@@ -318,6 +318,7 @@ export function SimpleLayout({
             simple
             onTocChange={setTocItems}
             onActiveChange={setActiveHeading}
+            onOpenSearch={onOpenSearch}
             onBack={() => {
               window.location.hash = '#/';
             }}

@@ -172,9 +172,18 @@ check('载入磁盘版本后正文为磁盘内容', afterLoad.body.includes('外
 const errors = exceptions.filter(Boolean);
 check('控制台无未捕获异常', errors.length === 0, errors.join(' | '));
 
-// 8.5 文内查找（Ctrl+F）
+// 退出编辑，回到阅读态再做搜索相关检查
 await evaluate(`[...document.querySelectorAll('.reader-actions .btn')].find((b) => b.textContent.includes('完成'))?.click(); 'done'`);
 await sleep(800);
+
+// 8.4 阅读页放大镜 → 全局搜索（Ctrl+K），不是文内查找
+await evaluate(`[...document.querySelectorAll('.reader-actions .icon-btn')].find((b) => (b.title || '').includes('搜索书库'))?.click(); 'search'`);
+await sleep(500);
+check('阅读页放大镜打开全局搜索', (await evaluate(`!!document.querySelector('.palette')`)) === true);
+await evaluate(`document.querySelector('.palette-input input')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 'esc'`);
+await sleep(350);
+
+// 8.5 文内查找（Ctrl+F）
 await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true })); 'find'`);
 await sleep(450);
 check('Ctrl+F 打开文内查找', (await evaluate(`!!document.querySelector('.find-bar')`)) === true);
