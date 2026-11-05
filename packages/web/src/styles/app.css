@@ -1038,12 +1038,15 @@ kbd {
   scrollbar-color: var(--scrollbar) transparent;
 }
 .simple-toc {
-  padding: 8px 8px 20px;
+  padding: 12px 8px 20px 12px;
   display: flex;
   flex-direction: column;
 }
 .simple-toc .toc-item {
   width: 100%;
+}
+.simple-toc .toc-empty {
+  margin: 0 8px;
 }
 .simple-root-files {
   padding-bottom: 4px;
@@ -1819,9 +1822,12 @@ kbd {
   color: var(--fg-3);
   text-transform: uppercase;
 }
-.toc nav {
+.toc-list {
   display: flex;
   flex-direction: column;
+}
+.toc-empty {
+  margin: 0 8px;
 }
 .toc-item {
   border: none;

@@ -109,6 +109,7 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 - 记忆：`localStorage · mr.app.mode`；简单视图文件树展开状态 `mr.simple.expanded`；侧栏 tab `mr.simple.side`。
 - 简单视图的阅读区仍支持编辑、划线批注、沉浸模式；只是不显示状态选择与右侧面板。
 - 侧栏 tab 用下划线式（与书架筛选一致），不使用胶囊。
+- 目录条目由同一个 `TocList` 组件渲染，简单视图与复杂视图的字体、缩进、左侧 2px 高亮边完全一致；滚动时同步当前章节。
 
 ### 3.1 顶栏
 - 高 44px，白底，1px 底线；左侧品牌字标 `md-reader`（无渐变色块，仅 1px 方框内一个 `m` 字）。

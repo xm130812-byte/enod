@@ -5,6 +5,7 @@ import { useLibrary } from '../hooks/useLibrary.tsx';
 import { dirOf, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
 import { ReaderPage } from './ReaderPage.tsx';
+import { TocList } from './Toc.tsx';
 import type { TocItem } from './Toc.tsx';
 
 interface FileNode {
@@ -106,6 +107,7 @@ export function SimpleLayout({
     }
   });
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
+  const [activeHeading, setActiveHeading] = useState<string | null>(null);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -118,6 +120,7 @@ export function SimpleLayout({
 
   useEffect(() => {
     setTocItems([]);
+    setActiveHeading(null);
   }, [docId]);
 
   useEffect(() => {
@@ -281,19 +284,14 @@ export function SimpleLayout({
         ) : (
           <div className="simple-tree simple-toc">
             {!docId ? (
-              <p className="muted small pad">选择一篇文章后显示目录</p>
-            ) : tocItems.length === 0 ? (
-              <p className="muted small pad">这篇文档还没有标题</p>
+              <p className="muted small toc-empty">选择一篇文章后显示目录</p>
             ) : (
-              tocItems.map((item) => (
-                <button
-                  key={item.id}
-                  className={`toc-item level-${item.level}`}
-                  onClick={() => jumpToHeading(item.id)}
-                >
-                  {item.text}
-                </button>
-              ))
+              <TocList
+                items={tocItems}
+                activeId={activeHeading}
+                onJump={jumpToHeading}
+                emptyText="这篇文档还没有标题"
+              />
             )}
           </div>
         )}
@@ -319,6 +317,7 @@ export function SimpleLayout({
             docId={docId}
             simple
             onTocChange={setTocItems}
+            onActiveChange={setActiveHeading}
             onBack={() => {
               window.location.hash = '#/';
             }}

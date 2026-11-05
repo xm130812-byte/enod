@@ -33,6 +33,7 @@ interface ReaderPageProps {
   simple?: boolean;
   onSwitchMode?: () => void;
   onTocChange?: (items: TocItem[]) => void;
+  onActiveChange?: (id: string | null) => void;
 }
 
 type PanelTab = 'notes' | 'backlinks' | 'mentions' | 'links';
@@ -46,7 +47,15 @@ const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
 
 const scrollMemory = new Map<string, number>();
 
-export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchMode, onTocChange }: ReaderPageProps) {
+export function ReaderPage({
+  docId,
+  onBack,
+  onOpenDoc,
+  simple = false,
+  onSwitchMode,
+  onTocChange,
+  onActiveChange,
+}: ReaderPageProps) {
   const { config, info, docs, resolveWiki, refreshDocs, applyConfig } = useLibrary();
   const { toast } = useToast();
 
@@ -61,6 +70,8 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
   const [toc, setToc] = useState<TocItem[]>([]);
   const onTocChangeRef = useRef(onTocChange);
   onTocChangeRef.current = onTocChange;
+  const onActiveChangeRef = useRef(onActiveChange);
+  onActiveChangeRef.current = onActiveChange;
   const [activeHeading, setActiveHeading] = useState<string | null>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
@@ -116,6 +127,8 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
     setSelection(null);
     setOrphans([]);
     setProgress(0);
+    setActiveHeading(null);
+    onActiveChangeRef.current?.(null);
     setMoreOpen(false);
 
     api
@@ -599,6 +612,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc, simple = false, onSwitchM
         else break;
       }
       setActiveHeading(current);
+      onActiveChangeRef.current?.(current);
     });
   };
 
