@@ -289,6 +289,10 @@ export function createServer(ctx: ServerContext): http.Server {
       return doc.links;
     }),
 
+    route('GET', '/api/v1/docs/:id/mentions', async ({ params }) =>
+      ctx.service.unlinkedMentions(params.id!, 20),
+    ),
+
     route('GET', '/api/v1/search', async ({ query }) => {
       const q = query.get('q') ?? '';
       const limit = Math.min(Number(query.get('limit') ?? 30) || 30, 100);

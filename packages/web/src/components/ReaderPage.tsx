@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api.ts';
+import type { UnlinkedMention } from '../api.ts';
 import type {
   Annotation,
   AnnotationColor,
@@ -31,7 +32,7 @@ interface ReaderPageProps {
   onOpenDoc: (id: string) => void;
 }
 
-type PanelTab = 'notes' | 'backlinks' | 'links';
+type PanelTab = 'notes' | 'backlinks' | 'mentions' | 'links';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
@@ -57,6 +58,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
   const [toc, setToc] = useState<TocItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string | null>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
+  const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
   const [panelTab, setPanelTab] = useState<PanelTab>('notes');
   const [panelOpen, setPanelOpen] = useState(true);
   const [immersive, setImmersive] = useState(false);
@@ -207,6 +209,25 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
     es.addEventListener('doc-removed', onRemoved as EventListener);
     return () => es.close();
   }, [docId, onBack]);
+
+  /* ---------------------------------------------------------------- mentions */
+
+  useEffect(() => {
+    if (panelTab !== 'mentions' || !doc) return;
+    let cancelled = false;
+    setMentions([]);
+    api
+      .mentions(doc.id)
+      .then((list) => {
+        if (!cancelled) setMentions(list);
+      })
+      .catch(() => {
+        if (!cancelled) setMentions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [panelTab, doc?.id, doc?.title]);
 
   /* ---------------------------------------------------------------- save */
 
@@ -432,6 +453,68 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
       toast('复制失败', 'error');
     }
     setSelection(null);
+  };
+
+  const exportAnnotations = (): void => {
+    const current = docRef.current;
+    if (!current || current.annotations.length === 0) return;
+    const lines: string[] = [
+      `# 批注：${current.title}`,
+      '',
+      `> ${current.relPath} · 导出于 ${new Date().toLocaleString('zh-CN')}`,
+      '',
+    ];
+    current.annotations.forEach((ann, index) => {
+      lines.push(`## ${index + 1}. ${ann.exact.replace(/\s+/g, ' ').trim()}`, '');
+      if (ann.note.trim()) lines.push(ann.note.trim(), '');
+      lines.push(
+        `- 颜色：${ann.color}`,
+        `- 时间：${ann.created || '未知'}`,
+        `- 位置：${ann.pos}`,
+        '',
+      );
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${current.title.replace(/[\\/:*?"<>|]/g, '-')}-批注.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast('批注已导出为 Markdown', 'success');
+  };
+
+  const linkMention = async (mention: UnlinkedMention): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      const source = await api.doc(mention.id);
+      const title = current.title.normalize('NFC');
+      const re = new RegExp(escapeRegExp(title), 'g');
+      let targetIndex = -1;
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(source.body))) {
+        const open = source.body.lastIndexOf('[[', match.index);
+        if (open !== -1) {
+          const close = source.body.indexOf(']]', open);
+          if (close === -1 || match.index < close) continue;
+        }
+        targetIndex = match.index;
+        break;
+      }
+      if (targetIndex < 0) {
+        toast('正文里没找到可替换的纯文本提及', 'error');
+        return;
+      }
+      const body =
+        source.body.slice(0, targetIndex) + `[[${title}]]` + source.body.slice(targetIndex + title.length);
+      await api.saveDoc(mention.id, { body, baseHash: source.rawHash });
+      setMentions((prev) => prev.filter((item) => item.id !== mention.id));
+      toast(`已在「${mention.title}」里加上链接`, 'success');
+      void refreshDocs();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '加链接失败', 'error');
+    }
   };
 
   /* --------------------------------------------------------------- events */
@@ -758,6 +841,9 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
               <button className={panelTab === 'backlinks' ? 'active' : ''} onClick={() => setPanelTab('backlinks')}>
                 反链 <span className="count">{doc.backlinks.length}</span>
               </button>
+              <button className={panelTab === 'mentions' ? 'active' : ''} onClick={() => setPanelTab('mentions')}>
+                提及
+              </button>
               <button className={panelTab === 'links' ? 'active' : ''} onClick={() => setPanelTab('links')}>
                 出链 <span className="count">{doc.links.length}</span>
               </button>
@@ -766,6 +852,14 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
             <div className="panel-body">
               {panelTab === 'notes' && (
                 <>
+                  {annotationList.length > 0 && (
+                    <div className="panel-toolbar">
+                      <span>{annotationList.length} 条批注</span>
+                      <button className="btn btn-ghost tiny" onClick={exportAnnotations} title="导出为 Markdown">
+                        <Icon name="external" size={12} /> 导出
+                      </button>
+                    </div>
+                  )}
                   {annotationList.length === 0 && (
                     <p className="panel-empty">选中正文中的一段文字，就能划高亮、写旁注。批注会写进这篇文件的 frontmatter。</p>
                   )}
@@ -813,6 +907,30 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
                       </span>
                       <span className="backlink-context">{back.context}</span>
                     </button>
+                  ))}
+                </>
+              )}
+
+              {panelTab === 'mentions' && (
+                <>
+                  {mentions.length === 0 && (
+                    <p className="panel-empty">
+                      没有未链接的提及。当别的文档在正文里提到「{doc.title}」但没有用 [[ ]] 链接时，会出现在这里。
+                    </p>
+                  )}
+                  {mentions.map((mention) => (
+                    <article key={mention.id} className="mention-item">
+                      <button className="mention-head" onClick={() => onOpenDoc(mention.id)}>
+                        <span className={`status-dot status-${mention.status}`} />
+                        <span className="mention-title">{mention.title}</span>
+                        <span className="mention-path">{mention.relPath}</span>
+                      </button>
+                      <p className="mention-snippet">{mention.snippet}</p>
+                      <button className="btn btn-ghost tiny" onClick={() => void linkMention(mention)}>
+                        <Icon name="link" size={12} />
+                        加链接
+                      </button>
+                    </article>
                   ))}
                 </>
               )}
@@ -1008,6 +1126,10 @@ function AnnotationCard({
       <footer className="ann-foot">{annotation.created ? formatRelativeTime(Date.parse(annotation.created)) : ''}</footer>
     </article>
   );
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function countWordsApprox(body: string): number {

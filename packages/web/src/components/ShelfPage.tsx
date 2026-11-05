@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DocStatus, DocSummary } from '../types.ts';
 import { useLibrary } from '../hooks/useLibrary.tsx';
+import { useToast } from '../hooks/useToast.tsx';
+import { api } from '../api.ts';
 import { basename, dirOf, formatPercent, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
 import type { IconName } from './Icons.tsx';
@@ -57,13 +59,18 @@ function sortDocs(docs: DocSummary[], sort: SortKey): DocSummary[] {
 }
 
 export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }: ShelfPageProps) {
-  const { docs, tags, info, loading, error, refresh, progress } = useLibrary();
+  const { docs, tags, info, loading, error, refresh, refreshDocs, progress } = useLibrary();
+  const { toast } = useToast();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [sort, setSort] = useState<SortKey>('recent');
   const [view, setView] = useState<ViewMode>('grid');
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState('');
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tagInput, setTagInput] = useState('');
+  const [tagOpen, setTagOpen] = useState(false);
 
   const counts = useMemo(() => {
     const map: Record<string, number> = { all: docs.length, unread: 0, reading: 0, done: 0, inbox: 0 };
@@ -95,6 +102,64 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
           ? '正在解析双向链接…'
           : '索引完成'
     : null;
+
+  const toggleBulk = () => {
+    setBulkMode((prev) => {
+      if (!prev && view !== 'grid' && view !== 'list') setView('grid');
+      return !prev;
+    });
+    setSelected(new Set());
+    setTagOpen(false);
+    setTagInput('');
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkStatus = async (nextStatus: DocStatus) => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        await api.setStatus(id, nextStatus);
+        ok++;
+      } catch {
+        /* 单篇失败不阻塞其余 */
+      }
+    }
+    toast(`已标为「${statusLabel(nextStatus)}」：${ok}/${ids.length}`, ok === ids.length ? 'success' : 'error');
+    setSelected(new Set());
+    await refreshDocs();
+  };
+
+  const bulkTag = async () => {
+    const tag = tagInput.trim().replace(/^#/, '');
+    if (!tag || selected.size === 0) return;
+    let ok = 0;
+    for (const id of selected) {
+      const doc = docs.find((item) => item.id === id);
+      if (!doc) continue;
+      const nextTags = [...new Set([...doc.tags, tag])];
+      try {
+        await api.saveDoc(id, { tags: nextTags });
+        ok++;
+      } catch {
+        /* ignore */
+      }
+    }
+    toast(`已给 ${ok} 篇加上 #${tag}`, ok > 0 ? 'success' : 'error');
+    setTagInput('');
+    setTagOpen(false);
+    setSelected(new Set());
+    await refreshDocs();
+  };
 
   return (
     <div className="shelf">
@@ -166,6 +231,11 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
             <option value="title">标题</option>
           </select>
 
+          <button className={`btn btn-ghost small ${bulkMode ? 'active' : ''}`} onClick={toggleBulk} title="批量选择">
+            <Icon name="check" size={14} />
+            批量
+          </button>
+
           <div className="view-toggle" role="group" aria-label="视图">
             <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title="书架">
               <Icon name="grid" size={16} />
@@ -182,6 +252,53 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
           </div>
         </div>
       </div>
+
+      {bulkMode && (
+        <div className="bulk-bar">
+          <span className="bulk-count">{selected.size} 篇已选</span>
+          <button className="btn btn-ghost small" onClick={() => setSelected(new Set(visible.map((doc) => doc.id)))}>
+            全选当前
+          </button>
+          <button className="btn btn-ghost small" onClick={() => setSelected(new Set())}>
+            清空
+          </button>
+          <span className="bulk-sep" />
+          <button className="btn btn-ghost small" disabled={selected.size === 0} onClick={() => void bulkStatus('reading')}>
+            标为在读
+          </button>
+          <button className="btn btn-ghost small" disabled={selected.size === 0} onClick={() => void bulkStatus('done')}>
+            标为已读
+          </button>
+          <button className="btn btn-ghost small" disabled={selected.size === 0} onClick={() => void bulkStatus('unread')}>
+            标为未读
+          </button>
+          {tagOpen ? (
+            <span className="bulk-tag-input">
+              <input
+                autoFocus
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                placeholder="标签名"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void bulkTag();
+                  if (e.key === 'Escape') setTagOpen(false);
+                }}
+              />
+              <button className="btn btn-primary small" onClick={() => void bulkTag()}>
+                加上
+              </button>
+            </span>
+          ) : (
+            <button className="btn btn-ghost small" disabled={selected.size === 0} onClick={() => setTagOpen(true)}>
+              加标签…
+            </button>
+          )}
+          <span className="bulk-sep" />
+          <button className="btn btn-ghost small" onClick={toggleBulk}>
+            退出批量
+          </button>
+        </div>
+      )}
 
       {activeTag && (
         <div className="active-filter">
@@ -255,13 +372,25 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
         <div className="shelf-scroll">
           <div className="doc-list">
             {visible.map((doc) => (
-              <ListRow key={doc.id} doc={doc} onClick={() => onOpenDoc(doc.id)} />
+              <ListRow
+                key={doc.id}
+                doc={doc}
+                bulkMode={bulkMode}
+                selected={selected.has(doc.id)}
+                onClick={() => (bulkMode ? toggleSelect(doc.id) : onOpenDoc(doc.id))}
+              />
             ))}
             {visible.length === 0 && <p className="muted pad">没有匹配的文档。</p>}
           </div>
         </div>
       ) : (
-        <VirtualDocGrid docs={visible} onOpenDoc={onOpenDoc} />
+        <VirtualDocGrid
+          docs={visible}
+          onOpenDoc={onOpenDoc}
+          bulkMode={bulkMode}
+          selected={selected}
+          onToggle={toggleSelect}
+        />
       )}
     </div>
   );
@@ -316,15 +445,36 @@ function EmptyLibrary({
   );
 }
 
-function DocCard({ doc, onClick }: { doc: DocSummary; onClick: () => void }) {
+function DocCard({
+  doc,
+  onClick,
+  bulkMode,
+  selected,
+}: {
+  doc: DocSummary;
+  onClick: () => void;
+  bulkMode: boolean;
+  selected: boolean;
+}) {
   return (
-    <button className="doc-card" onClick={onClick} title={doc.title}>
+    <button
+      className={`doc-card ${bulkMode ? 'selectable' : ''} ${selected ? 'selected' : ''}`}
+      onClick={onClick}
+      title={doc.title}
+    >
       <div className="card-top">
         <span className={`status-pill status-${doc.status}`}>
           <span className="status-dot" />
           {statusLabel(doc.status)}
         </span>
-        <span className="card-time">{formatRelativeTime(doc.mtime)}</span>
+        <span className="card-top-right">
+          {bulkMode && (
+            <span className={`select-mark ${selected ? 'on' : ''}`}>
+              {selected && <Icon name="check" size={11} />}
+            </span>
+          )}
+          <span className="card-time">{formatRelativeTime(doc.mtime)}</span>
+        </span>
       </div>
       <h3 className="card-title">{doc.title}</h3>
       <p className="card-excerpt">{doc.excerpt || '（空文档）'}</p>
@@ -357,9 +507,22 @@ function DocCard({ doc, onClick }: { doc: DocSummary; onClick: () => void }) {
   );
 }
 
-function ListRow({ doc, onClick }: { doc: DocSummary; onClick: () => void }) {
+function ListRow({
+  doc,
+  onClick,
+  bulkMode,
+  selected,
+}: {
+  doc: DocSummary;
+  onClick: () => void;
+  bulkMode: boolean;
+  selected: boolean;
+}) {
   return (
-    <button className="list-row" onClick={onClick}>
+    <button className={`list-row ${selected ? 'selected' : ''}`} onClick={onClick}>
+      <span className={`select-mark ${bulkMode ? 'visible' : ''} ${selected ? 'on' : ''}`}>
+        {selected && bulkMode && <Icon name="check" size={11} />}
+      </span>
       <span className={`status-dot status-${doc.status}`} />
       <span className="list-title">{doc.title}</span>
       <span className="list-path">{doc.relPath}</span>
@@ -376,7 +539,19 @@ function ListRow({ doc, onClick }: { doc: DocSummary; onClick: () => void }) {
   );
 }
 
-function VirtualDocGrid({ docs, onOpenDoc }: { docs: DocSummary[]; onOpenDoc: (id: string) => void }) {
+function VirtualDocGrid({
+  docs,
+  onOpenDoc,
+  bulkMode,
+  selected,
+  onToggle,
+}: {
+  docs: DocSummary[];
+  onOpenDoc: (id: string) => void;
+  bulkMode: boolean;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ cols: 3, viewport: 800, scrollTop: 0 });
 
@@ -419,7 +594,13 @@ function VirtualDocGrid({ docs, onOpenDoc }: { docs: DocSummary[]; onOpenDoc: (i
         }}
       >
         {slice.map((doc) => (
-          <DocCard key={doc.id} doc={doc} onClick={() => onOpenDoc(doc.id)} />
+          <DocCard
+            key={doc.id}
+            doc={doc}
+            bulkMode={bulkMode}
+            selected={selected.has(doc.id)}
+            onClick={() => (bulkMode ? onToggle(doc.id) : onOpenDoc(doc.id))}
+          />
         ))}
       </div>
       {docs.length === 0 && <p className="muted pad">没有匹配的文档。</p>}

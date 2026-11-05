@@ -68,6 +68,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return data as T;
 }
 
+export interface UnlinkedMention {
+  id: string;
+  title: string;
+  relPath: string;
+  status: DocStatus;
+  snippet: string;
+}
+
 export const api = {
   health: () => request<{ ok: boolean; version: string; port: number }>('/health'),
 
@@ -124,6 +132,7 @@ export const api = {
 
   search: (q: string, limit = 30) =>
     request<SearchResult[]>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  mentions: (id: string) => request<UnlinkedMention[]>(`/docs/${encodeURIComponent(id)}/mentions`),
   tags: () => request<{ tag: string; count: number }[]>('/tags'),
   preview: (target: string) => request<{ id: string; title: string; excerpt: string } | { notFound: true }>(`/preview?target=${encodeURIComponent(target)}`),
 

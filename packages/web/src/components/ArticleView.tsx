@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { DocPayload } from '../types.ts';
 import { renderMarkdown } from '../lib/markdown.ts';
 import { applyMarks, collectText, flashAnnotation, markSpecsFromAnchors } from '../lib/annotate.ts';
@@ -57,6 +57,8 @@ function readToc(root: HTMLElement): TocItem[] {
 export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function ArticleView(props, ref) {
   const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage } = props;
   const containerRef = useRef<HTMLDivElement>(null);
+  const [preview, setPreview] = useState<{ left: number; top: number; title: string; text: string } | null>(null);
+  const hoverTimer = useRef<number | null>(null);
   const propsRef = useRef({
     doc,
     theme,
@@ -148,10 +150,45 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
   }, [doc.annotations, applyAnchors]);
 
   return (
-    <div
-      className="article"
-      ref={containerRef}
-      onClick={(event) => {
+    <>
+      <div
+        className="article"
+        ref={containerRef}
+        onMouseOver={(event) => {
+          const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a.wiki-link');
+          if (!link || link.classList.contains('wiki-broken')) return;
+          const target = link.dataset.wikiTarget;
+          if (!target) return;
+          if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+          const rect = link.getBoundingClientRect();
+          hoverTimer.current = window.setTimeout(() => {
+            void api
+              .preview(target)
+              .then((res) => {
+                if ('notFound' in res) return;
+                const maxWidth = 320;
+                const left = Math.max(12, Math.min(rect.left, window.innerWidth - maxWidth - 12));
+                const above = rect.bottom + 190 > window.innerHeight;
+                setPreview({
+                  left,
+                  top: above ? rect.top - 8 : rect.bottom + 8,
+                  title: res.title,
+                  text: res.excerpt,
+                });
+              })
+              .catch(() => {});
+          }, 260);
+        }}
+        onMouseOut={(event) => {
+          const link = (event.target as HTMLElement).closest('a.wiki-link');
+          if (!link) return;
+          if (hoverTimer.current !== null) {
+            window.clearTimeout(hoverTimer.current);
+            hoverTimer.current = null;
+          }
+          setPreview(null);
+        }}
+        onClick={(event) => {
         const target = event.target as HTMLElement;
         const wiki = target.closest<HTMLAnchorElement>('a.wiki-link');
         if (wiki) {
@@ -180,7 +217,18 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         if (img) {
           propsRef.current.onImage(img.src, img.alt);
         }
-      }}
-    />
+        }}
+      />
+      {preview && (
+        <div
+          className="wiki-preview"
+          style={{ left: preview.left, top: preview.top }}
+          onMouseLeave={() => setPreview(null)}
+        >
+          <strong>{preview.title}</strong>
+          <p>{preview.text || '（空文档）'}</p>
+        </div>
+      )}
+    </>
   );
 });

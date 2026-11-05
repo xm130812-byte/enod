@@ -213,6 +213,14 @@ function makeSnippet(text: string, needle: string, radius = 60): { snippet: stri
   return { snippet, start: matchStart, end: matchEnd };
 }
 
+export interface UnlinkedMention {
+  id: string;
+  title: string;
+  relPath: string;
+  status: DocStatus;
+  snippet: string;
+}
+
 export class LibraryService {
   paths: DataPaths;
   config: ConfigStore;
@@ -873,6 +881,52 @@ export class LibraryService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Unlinked Mentions：正文提到本篇标题、但没有 [[链接]] 的文档。
+   * 返回命中的上下文片段，前端提供「一键加链」。
+   */
+  async unlinkedMentions(docId: string, limit = 20): Promise<UnlinkedMention[]> {
+    if (!this.root) return [];
+    const target = this.requireDoc(docId);
+    const title = target.title.normalize('NFC').trim();
+    if (title.length < 2) return [];
+    const candidates = this.db.mentionCandidates(title, docId, limit * 2);
+    const out: UnlinkedMention[] = [];
+    for (const candidate of candidates) {
+      const row = this.db.getDoc(candidate.doc.id);
+      if (!row) continue;
+      let body: string;
+      try {
+        const buffer = await fsp.readFile(resolveInRoot(this.root, row.rel_path));
+        body = parseLayout(decodeFile(buffer).text).body;
+      } catch {
+        continue;
+      }
+      const idx = body.indexOf(title);
+      if (idx === -1) continue;
+      // 跳过已经处在 [[...]] 里的提及
+      const open = body.lastIndexOf('[[', idx);
+      if (open !== -1) {
+        const close = body.indexOf(']]', open);
+        if (close === -1 || idx < close) continue;
+      }
+      const start = Math.max(0, idx - 60);
+      const end = Math.min(body.length, idx + title.length + 60);
+      out.push({
+        id: row.id,
+        title: row.title,
+        relPath: row.rel_path,
+        status: isStatus(row.status) ? row.status : 'unread',
+        snippet:
+          (start > 0 ? '…' : '') +
+          body.slice(start, end).replace(/\s+/g, ' ').trim() +
+          (end < body.length ? '…' : ''),
+      });
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   /** 目录树（用于新建/移动对话框） */
