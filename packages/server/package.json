@@ -1,0 +1,14 @@
+{
+  "name": "@md-reader/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "md-reader 守护进程：索引、文件服务、API",
+  "dependencies": {
+    "iconv-lite": "^0.6.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0"
+  }
+}
