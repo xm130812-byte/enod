@@ -1753,6 +1753,54 @@ kbd {
   z-index: 20;
   flex: none;
 }
+
+/* 文内查找 */
+.find-bar {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  z-index: 36;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+  color: var(--fg-3);
+}
+.find-bar input {
+  border: none;
+  background: transparent;
+  width: 170px;
+  padding: 2px 4px;
+  font-size: 12.5px;
+  outline: none;
+}
+.find-bar input:focus {
+  border: none;
+}
+.find-count {
+  min-width: 46px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.find-count.empty {
+  color: var(--danger);
+}
+
+mark.find-hit {
+  background: color-mix(in oklab, var(--yellow) 62%, transparent);
+  color: var(--mark-ink);
+  border-radius: 0;
+  padding: 0;
+}
+mark.find-hit.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  outline: 1px solid var(--accent);
+}
 .progress-line i {
   position: absolute;
   left: 0;
@@ -1864,6 +1912,7 @@ kbd {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 .reader-scroll {
   flex: 1;

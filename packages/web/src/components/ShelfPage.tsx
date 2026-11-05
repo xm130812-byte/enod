@@ -201,7 +201,7 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings, o
           <div className="brand-text">
             <strong>md-reader</strong>
             <span className="brand-sub">
-              {info?.root ? basename(info.root) : '未挂载书库'} · {info?.stats.total ?? docs.length} 篇 ·{' '}
+              万卷 · {info?.root ? basename(info.root) : '未挂载'} · {info?.stats.total ?? docs.length} 篇 ·{' '}
               {formatWords(info?.stats.words ?? 0)}
             </span>
           </div>
@@ -214,9 +214,9 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings, o
         </button>
 
         <div className="head-actions">
-          <button className="btn btn-ghost small" onClick={onSwitchMode} title="简单视图：左侧文件夹 + 中间文章">
+          <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到一页（左侧文件树 + 中间文章）">
             <Icon name="layout" size={14} />
-            简单
+            一页
           </button>
           <button className="btn btn-primary" onClick={onNewDoc}>
             <Icon name="plus" size={16} />

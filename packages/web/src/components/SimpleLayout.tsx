@@ -232,7 +232,7 @@ export function SimpleLayout({
             <div className="brand-text">
               <strong>md-reader</strong>
               <span className="brand-sub">
-                {docs.length} 篇 · {formatWords(info?.stats.words ?? 0)}
+                一页 · {docs.length} 篇 · {formatWords(info?.stats.words ?? 0)}
               </span>
             </div>
           </div>
@@ -301,8 +301,8 @@ export function SimpleLayout({
             <Icon name="plus" size={14} />
             新建
           </button>
-          <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到书架/三栏视图">
-            复杂视图
+          <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到万卷（书架 + 三栏）">
+            万卷
           </button>
           <button className="icon-btn" onClick={onOpenSettings} title="设置">
             <Icon name="settings" size={16} />
@@ -341,7 +341,7 @@ export function SimpleLayout({
               </div>
             )}
             <button className="btn btn-ghost small" onClick={onSwitchMode}>
-              打开书架视图
+              打开万卷
             </button>
           </div>
         )}

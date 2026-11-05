@@ -24,6 +24,7 @@ import { Modal } from './Modal.tsx';
 import { Icon } from './Icons.tsx';
 import { getSelectionInfo } from '../lib/annotate.ts';
 import type { SelectionInfo } from '../lib/annotate.ts';
+import { clearFindMatches, highlightFindMatches } from '../lib/find.ts';
 import { clamp, formatPercent, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 
 interface ReaderPageProps {
@@ -79,6 +80,10 @@ export function ReaderPage({
   const [panelOpen, setPanelOpen] = useState(true);
   const [immersive, setImmersive] = useState(false);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findCount, setFindCount] = useState(0);
+  const [findIndex, setFindIndex] = useState(0);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
   const [progress, setProgress] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -89,6 +94,7 @@ export function ReaderPage({
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<ArticleHandle>(null);
   const editorRef = useRef<EditorHandle>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<DocPayload | null>(null);
   const bodyRef = useRef('');
   const dirtyRef = useRef(false);
@@ -129,6 +135,10 @@ export function ReaderPage({
     setProgress(0);
     setActiveHeading(null);
     onActiveChangeRef.current?.(null);
+    setFindOpen(false);
+    setFindQuery('');
+    setFindCount(0);
+    setFindIndex(0);
     setMoreOpen(false);
 
     api
@@ -247,6 +257,36 @@ export function ReaderPage({
     };
   }, [panelTab, doc?.id, doc?.title]);
 
+  /* ---------------------------------------------------------------- find */
+
+  useEffect(() => {
+    if (mode !== 'read') return;
+    const container = scrollRef.current?.querySelector<HTMLElement>('.article');
+    if (!container) return;
+    if (!findOpen || !findQuery.trim()) {
+      clearFindMatches(container);
+      setFindCount(0);
+      setFindIndex(0);
+      return;
+    }
+    const marks = highlightFindMatches(container, findQuery, findIndex);
+    setFindCount(marks.length);
+    if (marks.length === 0) {
+      if (findIndex !== 0) setFindIndex(0);
+    } else if (findIndex >= marks.length) {
+      setFindIndex(0);
+    }
+  }, [findOpen, findQuery, findIndex, mode, doc?.body, doc?.annotations]);
+
+  useEffect(() => {
+    if (mode === 'edit' && findOpen) {
+      setFindOpen(false);
+      setFindQuery('');
+      setFindCount(0);
+      setFindIndex(0);
+    }
+  }, [mode, findOpen]);
+
   /* ---------------------------------------------------------------- save */
 
   const save = async (body: string, opts: { baseHash?: string } = {}): Promise<boolean> => {
@@ -325,6 +365,33 @@ export function ReaderPage({
     setSaveState('idle');
     setSelection(null);
     setExternalChanged(false);
+  };
+
+  const closeFind = (): void => {
+    setFindOpen(false);
+    setFindQuery('');
+    setFindCount(0);
+    setFindIndex(0);
+    const container = scrollRef.current?.querySelector<HTMLElement>('.article');
+    if (container) clearFindMatches(container);
+  };
+
+  const toggleFind = (): void => {
+    if (findOpen) {
+      closeFind();
+      return;
+    }
+    if (modeRef.current === 'edit') return;
+    setFindOpen(true);
+    window.setTimeout(() => {
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
+    }, 30);
+  };
+
+  const stepFind = (delta: number): void => {
+    if (findCount <= 0) return;
+    setFindIndex((prev) => (prev + delta + findCount) % findCount);
   };
 
   /* ------------------------------------------------------- external reload */
@@ -559,9 +626,15 @@ export function ReaderPage({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      const typing = Boolean(target.closest('input, textarea, [contenteditable="true"], .cm-editor'));
+      const target = event.target instanceof Element ? event.target : null;
+      const typing = target
+        ? Boolean(target.closest('input, textarea, [contenteditable="true"], .cm-editor'))
+        : false;
       if (event.key === 'Escape') {
+        if (findOpen) {
+          closeFind();
+          return;
+        }
         if (moreOpen) {
           setMoreOpen(false);
           return;
@@ -579,6 +652,15 @@ export function ReaderPage({
           return;
         }
       }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && modeRef.current === 'read') {
+        event.preventDefault();
+        setFindOpen(true);
+        window.setTimeout(() => {
+          findInputRef.current?.focus();
+          findInputRef.current?.select();
+        }, 30);
+        return;
+      }
       if (typing) return;
       if (event.key === 'e' || event.key === 'E') {
         if (modeRef.current === 'read') enterEdit();
@@ -591,7 +673,7 @@ export function ReaderPage({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selection, immersive, moreOpen]);
+  }, [selection, immersive, moreOpen, findOpen]);
 
   const onScroll = (): void => {
     const el = scrollRef.current;
@@ -704,6 +786,15 @@ export function ReaderPage({
 
         <div className="reader-actions">
           {mode === 'read' && (
+            <button
+              className={`icon-btn ${findOpen ? 'active' : ''}`}
+              onClick={toggleFind}
+              title="文内查找（Ctrl+F）"
+            >
+              <Icon name="search" size={17} />
+            </button>
+          )}
+          {mode === 'read' && (
             <>
               {!simple && (
                 <select
@@ -807,7 +898,7 @@ export function ReaderPage({
                       onSwitchMode();
                     }}
                   >
-                    <Icon name="layout" size={15} /> 切换到简单视图
+                    <Icon name="layout" size={15} /> 切换到一页
                   </button>
                 )}
               </div>
@@ -834,6 +925,43 @@ export function ReaderPage({
         {!immersive && !focusMode && !simple && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
 
         <div className="reader-content">
+          {findOpen && mode === 'read' && (
+            <div className="find-bar">
+              <Icon name="search" size={14} />
+              <input
+                ref={findInputRef}
+                value={findQuery}
+                placeholder="在本文中查找"
+                spellCheck={false}
+                onChange={(event) => {
+                  setFindQuery(event.target.value);
+                  setFindIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    stepFind(event.shiftKey ? -1 : 1);
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeFind();
+                  }
+                }}
+              />
+              <span className={`find-count ${findQuery && findCount === 0 ? 'empty' : ''}`}>
+                {findQuery ? (findCount > 0 ? `${findIndex + 1}/${findCount}` : '无结果') : ''}
+              </span>
+              <button className="icon-btn tiny" onClick={() => stepFind(-1)} disabled={findCount === 0} title="上一个（Shift+Enter）">
+                <Icon name="up" size={14} />
+              </button>
+              <button className="icon-btn tiny" onClick={() => stepFind(1)} disabled={findCount === 0} title="下一个（Enter）">
+                <Icon name="down" size={14} />
+              </button>
+              <button className="icon-btn tiny" onClick={closeFind} title="关闭（Esc）">
+                <Icon name="close" size={13} />
+              </button>
+            </div>
+          )}
           {doc.source?.url && mode === 'read' && (
             <div className="source-bar">
               <Icon name="link" size={14} />

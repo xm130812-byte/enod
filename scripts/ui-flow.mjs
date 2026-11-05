@@ -71,7 +71,7 @@ await send('Page.enable');
 await send('Runtime.enable');
 await send('Page.navigate', { url: `${BASE}/#/doc/${created.id}` });
 await sleep(2200);
-// 复杂视图承载状态选择、侧栏等完整功能
+// 万卷视图承载状态选择、侧栏等完整功能
 await evaluate(`localStorage.setItem('mr.app.mode','complex'); location.reload(); 'reload'`);
 await sleep(2400);
 
@@ -172,7 +172,33 @@ check('载入磁盘版本后正文为磁盘内容', afterLoad.body.includes('外
 const errors = exceptions.filter(Boolean);
 check('控制台无未捕获异常', errors.length === 0, errors.join(' | '));
 
-// 9. 简单视图：左侧文件树 + 中间文章 + 目录浮层，无状态导航
+// 8.5 文内查找（Ctrl+F）
+await evaluate(`[...document.querySelectorAll('.reader-actions .btn')].find((b) => b.textContent.includes('完成'))?.click(); 'done'`);
+await sleep(800);
+await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true })); 'find'`);
+await sleep(450);
+check('Ctrl+F 打开文内查找', (await evaluate(`!!document.querySelector('.find-bar')`)) === true);
+await evaluate(`(() => {
+  const input = document.querySelector('.find-bar input');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  setter.call(input, '外部');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return 'typed';
+})()`);
+await sleep(700);
+const findMarks = await evaluate(`document.querySelectorAll('mark.find-hit').length`);
+check('文内查找高亮命中', findMarks > 0, `marks=${findMarks}`);
+check(
+  '文内查找显示计数',
+  /^1\/\d+$/.test((await evaluate(`document.querySelector('.find-count')?.textContent ?? ''`)) ?? ''),
+);
+await evaluate(`document.querySelectorAll('.find-bar .icon-btn')[1]?.click(); 'next'`);
+await sleep(400);
+await evaluate(`document.querySelector('.find-bar input')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 'close'`);
+await sleep(400);
+check('Esc 关闭文内查找并清理高亮', (await evaluate(`!document.querySelector('.find-bar') && document.querySelectorAll('mark.find-hit').length === 0`)) === true);
+
+// 9. 一页：左侧文件树 / 目录 + 中间文章，无状态导航
 await evaluate(`localStorage.setItem('mr.app.mode','simple'); location.reload(); 'reload'`);
 await sleep(2400);
 const simple = await evaluate(`JSON.stringify({
@@ -182,8 +208,8 @@ const simple = await evaluate(`JSON.stringify({
   statusSelect: !!document.querySelector('.status-select'),
 })`);
 const simpleState = JSON.parse(simple);
-check('简单视图渲染（文件树 + 文章）', simpleState.simple && simpleState.tree && simpleState.article);
-check('简单视图没有状态导航', simpleState.statusSelect === false);
+check('一页渲染（文件树 + 文章）', simpleState.simple && simpleState.tree && simpleState.article);
+check('一页没有状态导航', simpleState.statusSelect === false);
 
 // 用有多级标题的样例文档验证「左侧目录」切换
 await evaluate(`location.hash = '#/doc/01M6PEGRCN1EKDDN8MCEYVHY88'; 'nav'`);
