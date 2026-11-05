@@ -7,6 +7,7 @@ interface ToastItem {
   id: number;
   kind: ToastKind;
   message: string;
+  leaving?: boolean;
 }
 
 interface ToastContextValue {
@@ -23,7 +24,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const id = ++seq.current;
     setItems((prev) => [...prev.slice(-3), { id, kind, message }]);
     window.setTimeout(() => {
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      setItems((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
+      window.setTimeout(() => {
+        setItems((prev) => prev.filter((item) => item.id !== id));
+      }, 180);
     }, kind === 'error' ? 5000 : 2600);
   }, []);
 
@@ -34,7 +38,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-stack" role="status" aria-live="polite">
         {items.map((item) => (
-          <div key={item.id} className={`toast toast-${item.kind}`}>
+          <div key={item.id} className={`toast toast-${item.kind} ${item.leaving ? 'leaving' : ''}`}>
             {item.message}
           </div>
         ))}

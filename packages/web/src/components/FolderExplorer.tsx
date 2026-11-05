@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { DocSummary } from '../types.ts';
 import { dirOf, formatRelativeTime, formatWords } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
+import { Collapse } from './Collapse.tsx';
 
 interface FolderNode {
   name: string;
@@ -162,11 +163,12 @@ export function FolderExplorer({ docs, dirs, onOpenDoc }: FolderExplorerProps) {
     return (
       <div key={node.path || '__root'}>
         <div
-          className={`folder-row ${selected === node.path ? 'active' : ''}`}
+          className={`folder-row ${selected === node.path ? 'active' : ''} ${isOpen ? 'open' : ''}`}
           style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => selectFolder(node.path)}
           role="button"
           tabIndex={0}
+          aria-expanded={hasChildren ? isOpen : undefined}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
@@ -183,7 +185,7 @@ export function FolderExplorer({ docs, dirs, onOpenDoc }: FolderExplorerProps) {
               }}
               aria-label={isOpen ? '折叠' : '展开'}
             >
-              <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={12} />
+              <Icon name="chevron-right" size={12} />
             </button>
           ) : (
             <span className="folder-caret" />
@@ -192,7 +194,7 @@ export function FolderExplorer({ docs, dirs, onOpenDoc }: FolderExplorerProps) {
           <span className="folder-name">{node.name}</span>
           {node.count > 0 && <span className="folder-count">{node.count}</span>}
         </div>
-        {hasChildren && isOpen && node.children.map((child) => renderNode(child, depth + 1))}
+        {hasChildren && <Collapse open={isOpen}>{node.children.map((child) => renderNode(child, depth + 1))}</Collapse>}
       </div>
     );
   };

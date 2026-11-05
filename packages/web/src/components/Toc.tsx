@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Icon } from './Icons.tsx';
 
 export interface TocItem {
@@ -38,12 +39,20 @@ interface TocProps {
   items: TocItem[];
   activeId: string | null;
   onJump: (id: string) => void;
+  collapsed?: boolean;
 }
 
 /** 复杂视图的三栏目录列 */
-export function Toc({ items, activeId, onJump }: TocProps) {
+export function Toc({ items, activeId, onJump, collapsed = false }: TocProps) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const node = ref.current as (HTMLElement & { inert?: boolean }) | null;
+    if (node) node.inert = collapsed;
+  }, [collapsed]);
+
   return (
-    <aside className="toc">
+    <aside className={`toc ${collapsed ? 'collapsed' : ''}`} ref={ref} aria-hidden={collapsed}>
       <p className="toc-title">
         <Icon name="list" size={14} /> 目录
       </p>

@@ -11,6 +11,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // 编辑器/工具写入的临时文件会触发 Windows 上的 EBUSY，直接忽略
+    watch: {
+      ignored: ['**/*.tmpdir/**', '**/*.tmp', '**/~*'],
+    },
     proxy: {
       '/api': {
         target: `http://127.0.0.1:${apiPort}`,

@@ -32,7 +32,12 @@ export type IconName =
   | 'alert'
   | 'save'
   | 'tree'
-  | 'sparkle';
+  | 'sparkle'
+  | 'panel-left'
+  | 'panel-right'
+  | 'chevron-left'
+  | 'chevrons-left'
+  | 'chevrons-right';
 
 const PATHS: Record<IconName, ReactNode> = {
   search: (
@@ -172,6 +177,31 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M5 4v16" />
       <path d="M5 8h6M5 14h6M5 20h6" />
       <path d="M11 6h8M11 12h8M11 18h8" />
+    </>
+  ),
+  'panel-left': (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </>
+  ),
+  'panel-right': (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M15 4v16" />
+    </>
+  ),
+  'chevron-left': <path d="M15 6l-6 6 6 6" />,
+  'chevrons-left': (
+    <>
+      <path d="M11 6l-6 6 6 6" />
+      <path d="M18 6l-6 6 6 6" />
+    </>
+  ),
+  'chevrons-right': (
+    <>
+      <path d="M13 6l6 6-6 6" />
+      <path d="M6 6l6 6-6 6" />
     </>
   ),
   sparkle: (

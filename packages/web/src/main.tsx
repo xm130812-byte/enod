@@ -4,6 +4,7 @@ import 'katex/dist/katex.min.css';
 import './styles/app.css';
 import './styles/markdown.css';
 import './styles/editor.css';
+import './styles/desktop.css';
 import { App } from './App.tsx';
 
 const container = document.getElementById('root');

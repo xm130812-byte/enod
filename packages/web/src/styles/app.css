@@ -1,22 +1,24 @@
 /* ============================================================
    md-reader · 界面样式
-   设计基线：DSH Markdown / 设计 token
-   原则：直角、细线、无阴影、单一强调色、密度可选
-   见 docs/UI-DESIGN.md
+   设计基线：MiaoYan 的留白 + Mole 的深色工具感
+   原则：小圆角、细线、轻阴影、单一强调色、短动效
+   见 docs/UI-DESIGN.md（v2）
    ============================================================ */
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
-    "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", "Noto Serif CJK SC",
     "Source Han Serif SC", SimSun, Georgia, serif;
-  --font-mono: "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", Menlo, "Courier New",
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New",
     monospace;
   --font-body: var(--font-sans);
 
-  --radius: 0px;
-  --radius-sm: 0px;
-  --radius-xs: 2px;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --radius-xs: 3px;
 
   --reader-font-size: 18px;
   --reader-line-height: 1.75;
@@ -24,13 +26,21 @@
 
   --card-h: 210px;
   --excerpt-lines: 3;
-  --list-py: 11px;
-  --panel-pad: 14px;
+  --list-py: 9px;
+  --panel-pad: 12px;
 
-  --yellow: #f6d36b;
-  --green: #a8d5a2;
-  --blue: #9cc3f0;
-  --pink: #f2a9bd;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur: 180ms;
+  --dur-slow: 260ms;
+
+  --shadow-sm: 0 1px 2px rgba(28, 24, 18, 0.05), 0 6px 18px rgba(28, 24, 18, 0.04);
+  --shadow-md: 0 18px 50px rgba(20, 17, 12, 0.14), 0 2px 8px rgba(20, 17, 12, 0.06);
+
+  --yellow: #f0cd74;
+  --green: #9cc9a4;
+  --blue: #9dbfe4;
+  --pink: #eaa9b9;
 }
 
 :root[data-font='sans'] {
@@ -47,81 +57,92 @@
 
 :root,
 :root[data-theme='light'] {
-  --bg: #ffffff;
+  --bg: #fbfaf7;
   --bg-elev: #ffffff;
-  --bg-soft: #f9fafb;
-  --bg-hover: #f3f4f6;
-  --fg: #0f1115;
-  --fg-2: #61666b;
-  --fg-3: #81858c;
-  --line: rgba(0, 0, 0, 0.1);
-  --line-strong: rgba(0, 0, 0, 0.18);
-  --danger: #c0392b;
-  --code-bg: #fafafa;
-  --code-block-bg: #f9fafb;
-  --mark-ink: #0f1115;
-  --overlay: rgba(15, 17, 21, 0.38);
-  --scrollbar: rgba(0, 0, 0, 0.18);
-  --shadow: none;
+  --bg-soft: #f3f1ec;
+  --bg-side: #f5f3ee;
+  --bg-hover: #eae7e0;
+  --bg-active: #e2ded5;
+  --fg: #201e1a;
+  --fg-2: #55514a;
+  --fg-3: #78736a;
+  --line: rgba(32, 30, 26, 0.09);
+  --line-soft: rgba(32, 30, 26, 0.055);
+  --line-strong: rgba(32, 30, 26, 0.18);
+  --danger: #b44533;
+  --code-bg: #f4f2ec;
+  --code-block-bg: #f6f4ef;
+  --mark-ink: #201e1a;
+  --overlay: rgba(24, 22, 18, 0.32);
+  --scrollbar: rgba(32, 30, 26, 0.18);
+  --shadow: var(--shadow-sm);
 
-  --accent: #4176e6;
-  --accent-hover: #2f63d4;
-  --accent-soft: #edf3fe;
+  --accent: #3b5f8a;
+  --accent-hover: #2e4f77;
+  --accent-soft: rgba(59, 95, 138, 0.1);
   --accent-fg: #ffffff;
 }
 
 /* ------------------------------------------------------------ 暗色 */
 
 :root[data-theme='dark'] {
-  --bg: #151517;
-  --bg-elev: #1b1b1c;
-  --bg-soft: #232324;
-  --bg-hover: #2c2c2e;
-  --fg: #f2f3f5;
-  --fg-2: #cfd3d6;
-  --fg-3: #a2a7ae;
-  --line: rgba(255, 255, 255, 0.12);
-  --line-strong: rgba(255, 255, 255, 0.22);
-  --danger: #f08a78;
-  --code-bg: #292929;
-  --code-block-bg: #1b1b1c;
-  --mark-ink: #151517;
-  --overlay: rgba(0, 0, 0, 0.55);
-  --scrollbar: rgba(255, 255, 255, 0.22);
+  --bg: #1a1b1e;
+  --bg-elev: #212226;
+  --bg-soft: #25262b;
+  --bg-side: #17181b;
+  --bg-hover: #2a2c31;
+  --bg-active: #33353b;
+  --fg: #e8e5df;
+  --fg-2: #bbb7ae;
+  --fg-3: #8b867d;
+  --line: rgba(255, 255, 255, 0.085);
+  --line-soft: rgba(255, 255, 255, 0.05);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --danger: #e58e7d;
+  --code-bg: #232428;
+  --code-block-bg: #1d1e22;
+  --mark-ink: #1a1b1e;
+  --overlay: rgba(0, 0, 0, 0.58);
+  --scrollbar: rgba(255, 255, 255, 0.18);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.22);
+  --shadow-md: 0 24px 70px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
 
-  --accent: #7aaaff;
-  --accent-hover: #9cc3ff;
-  --accent-soft: rgba(65, 118, 230, 0.16);
-  --accent-fg: #0f1115;
+  --accent: #8fb3d9;
+  --accent-hover: #a9c8ea;
+  --accent-soft: rgba(143, 179, 217, 0.14);
+  --accent-fg: #14161a;
 
-  --yellow: #a9862f;
-  --green: #4f8b5c;
-  --blue: #4f7aa8;
-  --pink: #a55d74;
+  --yellow: #b8963f;
+  --green: #5f9468;
+  --blue: #5d84ac;
+  --pink: #a86578;
 }
 
 /* ------------------------------------------------------------ 护眼 */
 
 :root[data-theme='sepia'] {
-  --bg: #f7f1e6;
-  --bg-elev: #fbf6ec;
-  --bg-soft: #efe6d5;
-  --bg-hover: #f0e7d6;
-  --fg: #2e261c;
-  --fg-2: #6b5d49;
-  --fg-3: #8d7c63;
-  --line: rgba(70, 50, 20, 0.14);
-  --line-strong: rgba(70, 50, 20, 0.26);
-  --danger: #a33b2c;
-  --code-bg: #efe5d2;
-  --code-block-bg: #f1e8d7;
-  --mark-ink: #2e261c;
-  --overlay: rgba(46, 38, 28, 0.4);
-  --scrollbar: rgba(70, 50, 20, 0.24);
+  --bg: #faf4e8;
+  --bg-elev: #fffaf1;
+  --bg-soft: #f2e9d8;
+  --bg-side: #f3ead9;
+  --bg-hover: #eae0cd;
+  --bg-active: #e2d6c0;
+  --fg: #2d261b;
+  --fg-2: #5f533f;
+  --fg-3: #7d6d55;
+  --line: rgba(70, 50, 20, 0.12);
+  --line-soft: rgba(70, 50, 20, 0.07);
+  --line-strong: rgba(70, 50, 20, 0.24);
+  --danger: #9c3a2b;
+  --code-bg: #efe4d1;
+  --code-block-bg: #f2e8d6;
+  --mark-ink: #2d261b;
+  --overlay: rgba(46, 38, 28, 0.36);
+  --scrollbar: rgba(70, 50, 20, 0.22);
 
   --accent: #8a5a1f;
   --accent-hover: #714816;
-  --accent-soft: #f0e2c8;
+  --accent-soft: rgba(138, 90, 31, 0.12);
   --accent-fg: #fffaf0;
 }
 
@@ -212,11 +233,20 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow: hidden;
+}
+
+:root[data-theme='light'],
+:root[data-theme='sepia'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 ::selection {
@@ -225,15 +255,21 @@ body {
 }
 
 *::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--scrollbar) 72%, transparent);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar);
-  border: 3px solid var(--bg);
+  background-clip: padding-box;
 }
 *::-webkit-scrollbar-corner {
   background: transparent;
@@ -277,85 +313,107 @@ a {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   background: var(--bg-elev);
   color: var(--fg);
-  border-radius: 0;
-  padding: 0 12px;
-  height: 30px;
-  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  height: 28px;
+  font-size: 12px;
   font-weight: 500;
-  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    transform 120ms var(--ease),
+    box-shadow var(--dur) var(--ease);
   white-space: nowrap;
+  user-select: none;
 }
 .btn:hover {
   background: var(--bg-hover);
-  border-color: var(--fg-3);
+  border-color: var(--line-strong);
+}
+.btn:active {
+  transform: scale(0.975);
 }
 .btn.active {
-  background: var(--bg-soft);
-  border-color: var(--line-strong);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 32%, transparent);
   color: var(--accent);
 }
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   cursor: not-allowed;
+  transform: none;
 }
 .btn-primary {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: transparent;
   color: var(--accent-fg);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 .btn-primary:hover {
   background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  border-color: transparent;
 }
 .btn-ghost {
   background: transparent;
-  border-color: var(--line);
+  border-color: transparent;
+  color: var(--fg-2);
 }
 .btn-ghost:hover {
-  background: var(--bg-soft);
-  border-color: var(--line-strong);
+  background: var(--bg-hover);
+  border-color: transparent;
+  color: var(--fg);
 }
 .btn-danger {
   background: var(--danger);
-  border-color: var(--danger);
+  border-color: transparent;
   color: #fff;
 }
 .btn.small {
   height: 26px;
-  padding: 0 9px;
-  font-size: 12px;
+  padding: 0 8px;
+  font-size: 11.5px;
 }
 .btn.tiny {
   height: 22px;
-  padding: 0 7px;
-  font-size: 11.5px;
+  padding: 0 6px;
+  font-size: 11px;
 }
 
 .icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--fg-2);
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    transform 120ms var(--ease);
   flex: none;
 }
 .icon-btn:hover {
-  background: var(--bg-soft);
+  background: var(--bg-hover);
   color: var(--fg);
-  border-color: var(--line);
+  border-color: transparent;
+}
+.icon-btn:active {
+  transform: scale(0.94);
 }
 .icon-btn.active {
   color: var(--accent);
-  border-color: var(--line-strong);
+  background: var(--accent-soft);
+  border-color: transparent;
 }
 .icon-btn.tiny {
   width: 22px;
@@ -364,23 +422,28 @@ a {
 
 .select {
   appearance: none;
-  border: 1px solid var(--line);
-  background: var(--bg-elev)
-    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2381858c' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
-    no-repeat right 8px center;
-  color: var(--fg);
-  border-radius: 0;
-  padding: 0 26px 0 9px;
-  height: 30px;
-  font-size: 12.5px;
+  border: 1px solid transparent;
+  background: transparent
+    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238d887f' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 7px center;
+  color: var(--fg-2);
+  border-radius: var(--radius-sm);
+  padding: 0 23px 0 8px;
+  height: 28px;
+  font-size: 12px;
   cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.select:hover {
+  background-color: var(--bg-hover);
+  color: var(--fg);
 }
 .select:focus-visible,
 .btn:focus-visible,
 .icon-btn:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 1px solid var(--accent);
+  outline: 2px solid color-mix(in oklab, var(--accent) 62%, transparent);
   outline-offset: 1px;
 }
 
@@ -390,12 +453,12 @@ input:not([type]),
 textarea {
   border: 1px solid var(--line);
   background: var(--bg-elev);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: 6px 9px;
   font-size: 13px;
   color: var(--fg);
   width: 100%;
-  transition: border-color 0.12s ease;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 input:focus,
 textarea:focus {
@@ -438,13 +501,14 @@ input[type='range']:focus-visible {
 
 kbd {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 4px;
   padding: 0 4px;
   color: var(--fg-3);
-  background: var(--bg-soft);
+  background: color-mix(in oklab, var(--fg) 4%, transparent);
   white-space: nowrap;
+  line-height: 16px;
 }
 
 .status-dot {

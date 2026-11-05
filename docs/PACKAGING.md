@@ -11,7 +11,7 @@
 |---|---|---|
 | Node SEA 单文件 sidecar | ✅ 已验证 | `dist/sea/md-reader.exe`（UPX 后 22.4 MB）+ `dist/sea/web/`（4.2 MB） |
 | 便携启动 | ✅ | `dist/sea/md-reader.cmd`（双击启动 exe + 打开 Chrome） |
-| 发布目录合计 | ✅ | **26.6 MB**（压缩前 118 MB） |
+| 发布目录合计 | ✅ | **26.7 MB**（压缩前 118 MB） |
 | Tauri 壳（托盘 + 安装包） | ⛔ 被工具链阻塞 | 本机无 Rust、无 MSVC Build Tools |
 
 SEA 验证的是「sidecar 能不能独立跑」：不依赖系统 Node、内置 `node:sqlite`、静态托管前端、索引与搜索正常。
@@ -85,9 +85,9 @@ $env:NO_UPX='1'; pnpm package
 | 自定义 Node（去掉/换小 ICU） | exe ~15 MB | 要 MSVC + 编译 Node；中文分词依赖 ICU，需改回纯 bigram，搜索质量下降 |
 | 换运行时（Bun / Deno 单文件） | 80–100 MB | 比现在大，且 `node:sqlite` 兼容性要重验 |
 | 嵌入 web 到 exe + 只发单文件 | 24–25 MB 单文件 | 省掉 4 MB 目录，但静态资源要走 SEA assets，改动大 |
-| 安装包 LZMA（NSIS/7z） | 下载 ~23 MB | 安装后仍占 26.6 MB；等 Tauri 壳一起做 |
+| 安装包 LZMA（NSIS/7z） | 下载 ~23 MB | 安装后仍占 26.7 MB；等 Tauri 壳一起做 |
 
-当前 26.6 MB 已经接近「不重写运行时」的下限；再往下需要动 Node 构建或换语言重写服务端，不建议为体积牺牲中文搜索。
+当前 26.7 MB 已经接近「不重写运行时」的下限；再往下需要动 Node 构建或换语言重写服务端，不建议为体积牺牲中文搜索。
 
 ---
 
@@ -141,7 +141,7 @@ cargo --version
 
 ## 5. 当前可交付的“便携版”
 
-`dist/sea/` 目录可以直接拷走（**26.6 MB**）：
+`dist/sea/` 目录可以直接拷走（**26.7 MB**）：
 
 ```
 dist/sea/

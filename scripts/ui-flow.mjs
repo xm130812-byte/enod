@@ -76,7 +76,7 @@ await evaluate(`localStorage.setItem('mr.app.mode','complex'); location.reload()
 await sleep(2400);
 
 // 1. 进入编辑
-await evaluate(`document.querySelector('.reader-actions .btn-ghost').click(); 'edit'`);
+await evaluate(`[...document.querySelectorAll('.reader-actions button')].find((b) => (b.title || '').startsWith('编辑'))?.click(); 'edit'`);
 await sleep(900);
 const inEdit = await evaluate(`!!document.querySelector('.cm-content')`);
 check('点击「编辑」进入编辑态', inEdit);
@@ -146,7 +146,7 @@ const search = await api('GET', `/api/v1/search?q=${encodeURIComponent('编辑�
 check('全文检索命中新内容', search.some((r) => r.id === created.id), `hits=${search.length}`);
 
 // 8. 外部修改 → 自动保存冲突 → 载入磁盘版本
-await evaluate(`document.querySelector('.reader-actions .btn-ghost').click(); 'edit'`);
+await evaluate(`[...document.querySelectorAll('.reader-actions button')].find((b) => (b.title || '').startsWith('编辑'))?.click(); 'edit'`);
 await sleep(800);
 await evaluate(`document.querySelector('.cm-content').focus()`);
 await send('Input.insertText', { text: '本地未保存的改动\n' });

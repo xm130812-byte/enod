@@ -4,6 +4,7 @@ import type { DocSummary } from '../types.ts';
 import { useLibrary } from '../hooks/useLibrary.tsx';
 import { dirOf, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
+import { Collapse } from './Collapse.tsx';
 import { ReaderPage } from './ReaderPage.tsx';
 import { TocList } from './Toc.tsx';
 import type { TocItem } from './Toc.tsx';
@@ -108,7 +109,23 @@ export function SimpleLayout({
   });
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mr.simple.collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const initialized = useRef(false);
+  const sideRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const side = sideRef.current as (HTMLElement & { inert?: boolean }) | null;
+    const rail = railRef.current as (HTMLElement & { inert?: boolean }) | null;
+    if (side) side.inert = collapsed;
+    if (rail) rail.inert = !collapsed;
+  }, [collapsed]);
 
   useEffect(() => {
     try {
@@ -117,6 +134,26 @@ export function SimpleLayout({
       /* ignore */
     }
   }, [sideTab]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mr.simple.collapsed', collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'b') return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, [contenteditable="true"]')) return;
+      event.preventDefault();
+      setCollapsed((value) => !value);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     setTocItems([]);
@@ -166,11 +203,12 @@ export function SimpleLayout({
     return (
       <div key={node.path}>
         <div
-          className="simple-folder"
+          className={`simple-folder ${isOpen ? 'open' : ''}`}
           style={{ paddingLeft: 8 + (node.depth - 1) * 14 }}
           onClick={() => toggle(node.path)}
           role="button"
           tabIndex={0}
+          aria-expanded={isOpen}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
@@ -179,30 +217,28 @@ export function SimpleLayout({
           }}
         >
           <span className="simple-caret">
-            <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={12} />
+            <Icon name="chevron-right" size={12} />
           </span>
           <Icon name="folder" size={14} className="folder-icon" />
           <span className="simple-folder-name">{node.name}</span>
           <span className="simple-count">{node.count}</span>
         </div>
-        {isOpen && (
-          <>
-            {node.folders.map(renderFolder)}
-            {node.files.map((doc) => (
-              <button
-                key={doc.id}
-                className={`simple-file ${doc.id === docId ? 'active' : ''}`}
-                style={{ paddingLeft: 8 + node.depth * 14 }}
-                onClick={() => onOpenDoc(doc.id)}
-                title={`${doc.title} · ${statusLabel(doc.status)}`}
-              >
-                <span className={`status-dot status-${doc.status}`} />
-                <span className="simple-file-title">{doc.title}</span>
-                <span className="simple-file-meta">{formatWords(doc.words)}</span>
-              </button>
-            ))}
-          </>
-        )}
+        <Collapse open={isOpen}>
+          {node.folders.map(renderFolder)}
+          {node.files.map((doc) => (
+            <button
+              key={doc.id}
+              className={`simple-file ${doc.id === docId ? 'active' : ''}`}
+              style={{ paddingLeft: 8 + node.depth * 14 }}
+              onClick={() => onOpenDoc(doc.id)}
+              title={`${doc.title} · ${statusLabel(doc.status)}`}
+            >
+              <span className={`status-dot status-${doc.status}`} />
+              <span className="simple-file-title">{doc.title}</span>
+              <span className="simple-file-meta">{formatWords(doc.words)}</span>
+            </button>
+          ))}
+        </Collapse>
       </div>
     );
   };
@@ -222,92 +258,155 @@ export function SimpleLayout({
   };
 
   return (
-    <div className="simple">
-      <aside className="simple-side">
-        <div className="simple-head">
-          <div className="brand">
-            <span className="brand-mark">
-              <Icon name="book" size={18} />
-            </span>
-            <div className="brand-text">
-              <strong>md-reader</strong>
-              <span className="brand-sub">
-                一页 · {docs.length} 篇 · {formatWords(info?.stats.words ?? 0)}
+    <div className={`simple ${collapsed ? 'side-collapsed' : ''}`}>
+      <aside className="simple-side" ref={sideRef}>
+        <div className="simple-side-inner">
+          <div className="simple-head">
+            <div className="brand">
+              <span className="brand-mark">
+                <Icon name="book" size={15} />
               </span>
+              <div className="brand-text">
+                <strong>md-reader</strong>
+                <span className="brand-sub">
+                  一页 · {docs.length} 篇 · {formatWords(info?.stats.words ?? 0)}
+                </span>
+              </div>
             </div>
+            <button
+              className="icon-btn side-collapse"
+              onClick={() => setCollapsed(true)}
+              title="收起侧边栏（Ctrl+B）"
+              aria-label="收起侧边栏"
+            >
+              <Icon name="chevrons-left" size={15} />
+            </button>
           </div>
-          <button className="icon-btn" onClick={onOpenSearch} title="搜索（Ctrl+K）">
-            <Icon name="search" size={16} />
-          </button>
-        </div>
 
-        <div className="simple-tabs" role="tablist">
-          <button
-            role="tab"
-            className={sideTab === 'files' ? 'active' : ''}
-            onClick={() => setSideTab('files')}
-          >
-            <Icon name="folder" size={13} />
-            文件夹
+          <button className="side-search" onClick={onOpenSearch} title="搜索书库（Ctrl+K）">
+            <Icon name="search" size={14} />
+            <span>搜索</span>
+            <kbd>Ctrl K</kbd>
           </button>
-          <button role="tab" className={sideTab === 'toc' ? 'active' : ''} onClick={() => setSideTab('toc')}>
-            <Icon name="list" size={13} />
-            目录
-          </button>
-        </div>
 
-        {sideTab === 'files' ? (
-          <div className="simple-tree">
-            {loading && docs.length === 0 ? (
-              <p className="muted small pad">加载中…</p>
-            ) : (
-              <>
-                {tree.files.length > 0 && (
-                  <div className="simple-root-files">
-                    {tree.files.map((doc) => (
-                      <button
-                        key={doc.id}
-                        className={`simple-file ${doc.id === docId ? 'active' : ''}`}
-                        style={{ paddingLeft: 22 }}
-                        onClick={() => onOpenDoc(doc.id)}
-                      >
-                        <span className={`status-dot status-${doc.status}`} />
-                        <span className="simple-file-title">{doc.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {tree.folders.map(renderFolder)}
-              </>
-            )}
+          <div className="simple-tabs" role="tablist" data-active={sideTab}>
+            <button
+              role="tab"
+              aria-selected={sideTab === 'files'}
+              className={sideTab === 'files' ? 'active' : ''}
+              onClick={() => setSideTab('files')}
+            >
+              文件夹
+              <span className="seg-count">{docs.length}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={sideTab === 'toc'}
+              className={sideTab === 'toc' ? 'active' : ''}
+              onClick={() => setSideTab('toc')}
+            >
+              目录
+              <span className="seg-count">{docId ? tocItems.length : 0}</span>
+            </button>
           </div>
-        ) : (
-          <div className="simple-tree simple-toc">
-            {!docId ? (
-              <p className="muted small toc-empty">选择一篇文章后显示目录</p>
-            ) : (
-              <TocList
-                items={tocItems}
-                activeId={activeHeading}
-                onJump={jumpToHeading}
-                emptyText="这篇文档还没有标题"
-              />
-            )}
-          </div>
-        )}
 
-        <div className="simple-foot">
-          <button className="btn btn-primary small" onClick={onNewDoc}>
-            <Icon name="plus" size={14} />
-            新建
-          </button>
-          <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到万卷（书架 + 三栏）">
-            万卷
-          </button>
-          <button className="icon-btn" onClick={onOpenSettings} title="设置">
-            <Icon name="settings" size={16} />
-          </button>
+          {sideTab === 'files' ? (
+            <div className="simple-tree">
+              {loading && docs.length === 0 ? (
+                <p className="muted small pad">加载中…</p>
+              ) : (
+                <>
+                  {tree.files.length > 0 && (
+                    <div className="simple-root-files">
+                      {tree.files.map((doc) => (
+                        <button
+                          key={doc.id}
+                          className={`simple-file ${doc.id === docId ? 'active' : ''}`}
+                          style={{ paddingLeft: 30 }}
+                          onClick={() => onOpenDoc(doc.id)}
+                        >
+                          <span className={`status-dot status-${doc.status}`} />
+                          <span className="simple-file-title">{doc.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {tree.folders.map(renderFolder)}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="simple-tree simple-toc">
+              {!docId ? (
+                <p className="muted small toc-empty">选择一篇文章后显示目录</p>
+              ) : (
+                <TocList
+                  items={tocItems}
+                  activeId={activeHeading}
+                  onJump={jumpToHeading}
+                  emptyText="这篇文档还没有标题"
+                />
+              )}
+            </div>
+          )}
+
+          <div className="simple-foot">
+            <button className="btn btn-primary small new-doc" onClick={onNewDoc} title="新建文档（Ctrl+N）">
+              <Icon name="plus" size={13} />
+              新建
+            </button>
+            <span className="simple-foot-stats">{formatWords(info?.stats.words ?? 0)}</span>
+            <button
+              className="icon-btn"
+              onClick={onSwitchMode}
+              title="切换到万卷（书架 + 三栏）"
+              aria-label="切换到万卷"
+            >
+              <Icon name="layout" size={15} />
+            </button>
+            <button className="icon-btn" onClick={onOpenSettings} title="设置" aria-label="设置">
+              <Icon name="settings" size={15} />
+            </button>
+          </div>
         </div>
+      </aside>
+
+      <aside className="side-rail" ref={railRef} aria-hidden={!collapsed}>
+        <button
+          className="rail-brand"
+          onClick={() => setCollapsed(false)}
+          title="展开侧边栏（Ctrl+B）"
+          aria-label="展开侧边栏"
+        >
+          <Icon name="book" size={14} />
+        </button>
+        <button
+          className="icon-btn rail-btn"
+          onClick={() => setCollapsed(false)}
+          title="展开侧边栏（Ctrl+B）"
+          aria-label="展开侧边栏"
+        >
+          <Icon name="chevrons-right" size={15} />
+        </button>
+        <div className="rail-sep" />
+        <button className="icon-btn rail-btn" onClick={onOpenSearch} title="搜索（Ctrl+K）" aria-label="搜索">
+          <Icon name="search" size={15} />
+        </button>
+        <button className="icon-btn rail-btn" onClick={onNewDoc} title="新建（Ctrl+N）" aria-label="新建">
+          <Icon name="plus" size={16} />
+        </button>
+        <span className="rail-spacer" />
+        <button
+          className="icon-btn rail-btn"
+          onClick={onSwitchMode}
+          title="切换到万卷"
+          aria-label="切换到万卷"
+        >
+          <Icon name="layout" size={15} />
+        </button>
+        <button className="icon-btn rail-btn" onClick={onOpenSettings} title="设置" aria-label="设置">
+          <Icon name="settings" size={15} />
+        </button>
       </aside>
 
       <main className="simple-main">

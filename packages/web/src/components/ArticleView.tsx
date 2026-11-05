@@ -119,6 +119,9 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
       resolveWiki: (target) => propsRef.current.resolveWiki(target),
     });
     sanitize(el);
+    // 顶栏已经显示标题；正文首个 H1 与标题相同时不重复渲染
+    const first = el.firstElementChild as HTMLElement | null;
+    if (first?.tagName === 'H1' && (first.textContent ?? '').trim() === doc.title.trim()) first.remove();
     resolveImages(el);
     propsRef.current.onToc(readToc(el));
     void highlightCodeBlocks(el, propsRef.current.theme).then(() => {

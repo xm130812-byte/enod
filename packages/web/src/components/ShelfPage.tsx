@@ -405,6 +405,15 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings, o
       ) : view === 'list' ? (
         <div className="shelf-scroll">
           <div className="doc-list">
+            <div className="list-head" aria-hidden="true">
+              <span />
+              <span />
+              <span>标题</span>
+              <span>路径</span>
+              <span>标签</span>
+              <span>字数</span>
+              <span>更新</span>
+            </div>
             {visible.map((doc) => (
               <ListRow
                 key={doc.id}

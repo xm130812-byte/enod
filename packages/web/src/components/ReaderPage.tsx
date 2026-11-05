@@ -61,6 +61,7 @@ export function ReaderPage({
 }: ReaderPageProps) {
   const { config, info, docs, resolveWiki, refreshDocs, applyConfig } = useLibrary();
   const { toast } = useToast();
+  const focusMode = !simple && config?.readerLayout === 'focus';
 
   const [doc, setDoc] = useState<DocPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +80,13 @@ export function ReaderPage({
   const [orphans, setOrphans] = useState<string[]>([]);
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
   const [panelTab, setPanelTab] = useState<PanelTab>('notes');
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mr.reader.panel') !== '0';
+    } catch {
+      return true;
+    }
+  });
   const [immersive, setImmersive] = useState(false);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [findOpen, setFindOpen] = useState(false);
@@ -94,6 +101,7 @@ export function ReaderPage({
   const [focusAnnId, setFocusAnnId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const articleRef = useRef<ArticleHandle>(null);
   const editorRef = useRef<EditorHandle>(null);
   const findInputRef = useRef<HTMLInputElement>(null);
@@ -118,6 +126,16 @@ export function ReaderPage({
       return next;
     });
   };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mr.reader.panel', panelOpen ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+    const panel = panelRef.current as (HTMLElement & { inert?: boolean }) | null;
+    if (panel) panel.inert = !panelOpen || simple || focusMode;
+  }, [panelOpen, simple, focusMode, doc?.id]);
 
   /* ---------------------------------------------------------------- load */
 
@@ -640,6 +658,15 @@ export function ReaderPage({
           void exitEdit();
           return;
         }
+        if (typing) return;
+        if (focusMode) {
+          void applyConfig({ readerLayout: 'document' });
+          return;
+        }
+        if (!simple) {
+          onBack();
+          return;
+        }
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && modeRef.current === 'read') {
         event.preventDefault();
@@ -648,6 +675,11 @@ export function ReaderPage({
           findInputRef.current?.focus();
           findInputRef.current?.select();
         }, 30);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'b' && !simple) {
+        event.preventDefault();
+        setPanelOpen((value) => !value);
         return;
       }
       if (typing) return;
@@ -662,7 +694,7 @@ export function ReaderPage({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selection, immersive, moreOpen, findOpen]);
+  }, [selection, immersive, moreOpen, findOpen, simple, focusMode, applyConfig, onBack]);
 
   const onScroll = (): void => {
     const el = scrollRef.current;
@@ -715,7 +747,6 @@ export function ReaderPage({
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
   const statusLabelText = doc ? statusLabel(doc.status) : '';
   const theme = config?.theme === 'dark' || (config?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-  const focusMode = !simple && config?.readerLayout === 'focus';
 
   if (loading) {
     return (
@@ -782,36 +813,45 @@ export function ReaderPage({
                 onOpenSearch?.();
               }}
               title="搜索书库（Ctrl+K）"
+              aria-label="搜索书库"
             >
-              <Icon name="search" size={17} />
+              <Icon name="search" size={16} />
             </button>
           )}
+          {mode === 'read' && !simple && (
+            <select
+              className="select status-select"
+              value={doc.status}
+              onChange={(e) => void changeStatus(e.target.value as DocStatus)}
+              title="阅读状态"
+              aria-label="阅读状态"
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
           {mode === 'read' && (
-            <>
-              {!simple && (
-                <select
-                  className="select status-select"
-                  value={doc.status}
-                  onChange={(e) => void changeStatus(e.target.value as DocStatus)}
-                  title="阅读状态"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <button className="btn btn-ghost small" onClick={enterEdit} title="编辑（E）">
-                <Icon name="edit" size={15} />
-                编辑
-              </button>
-            </>
+            <button className="icon-btn" onClick={enterEdit} title="编辑（E）" aria-label="编辑">
+              <Icon name="edit" size={16} />
+            </button>
+          )}
+          {mode === 'read' && !simple && (
+            <button
+              className={`icon-btn ${focusMode ? 'active' : ''}`}
+              onClick={() => void applyConfig({ readerLayout: focusMode ? 'document' : 'focus' })}
+              title={focusMode ? '退出专注模式' : '专注模式'}
+              aria-label="切换专注模式"
+            >
+              <Icon name="layout" size={16} />
+            </button>
           )}
           {mode === 'edit' && (
             <>
               <button className="btn btn-ghost small" onClick={() => void saveRef.current(bodyRef.current)}>
-                <Icon name="save" size={15} />
+                <Icon name="save" size={14} />
                 保存
               </button>
               <button className="btn btn-primary small" onClick={() => void exitEdit()}>
@@ -819,42 +859,15 @@ export function ReaderPage({
               </button>
             </>
           )}
-          {!simple && (
-            <button
-              className={`btn btn-ghost small ${focusMode ? 'active' : ''}`}
-              onClick={() => void applyConfig({ readerLayout: focusMode ? 'document' : 'focus' })}
-              title="切换阅读布局：文档（三栏）/ 专注（单栏）"
-            >
-              <Icon name="layout" size={14} />
-              {focusMode ? '文档' : '专注'}
-            </button>
-          )}
-          {!simple && (
-            <button
-              className={`icon-btn ${panelOpen ? 'active' : ''}`}
-              onClick={() => {
-                if (focusMode) {
-                  void applyConfig({ readerLayout: 'document' });
-                  setPanelOpen(true);
-                  return;
-                }
-                setPanelOpen((v) => !v);
-              }}
-              title="侧边面板"
-            >
-              <Icon name="sidebar" size={18} />
-            </button>
-          )}
-          <button
-            className={`icon-btn ${immersive ? 'active' : ''}`}
-            onClick={() => setImmersive((v) => !v)}
-            title="沉浸模式（Esc 退出）"
-          >
-            <Icon name="book" size={18} />
-          </button>
           <div className="more-wrap">
-            <button className="icon-btn" onClick={() => setMoreOpen((v) => !v)} title="更多">
-              <Icon name="more" size={18} />
+            <button
+              className={`icon-btn ${moreOpen ? 'active' : ''}`}
+              onClick={() => setMoreOpen((v) => !v)}
+              title="更多"
+              aria-label="更多"
+              aria-expanded={moreOpen}
+            >
+              <Icon name="more" size={17} />
             </button>
             {moreOpen && (
               <div className="menu" onMouseLeave={() => setMoreOpen(false)}>
@@ -874,15 +887,19 @@ export function ReaderPage({
                 >
                   <Icon name="folder" size={15} /> 移动到…
                 </button>
-                <button
-                  className="danger"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    setConfirmDelete(true);
-                  }}
-                >
-                  <Icon name="trash" size={15} /> 删除（进 .trash）
-                </button>
+                <span className="menu-sep" />
+                {!simple && (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      setImmersive((v) => !v);
+                    }}
+                  >
+                    <Icon name="book" size={15} />
+                    {immersive ? '退出沉浸模式' : '沉浸模式'}
+                    <kbd>Esc</kbd>
+                  </button>
+                )}
                 {!simple && onSwitchMode && (
                   <button
                     onClick={() => {
@@ -893,11 +910,28 @@ export function ReaderPage({
                     <Icon name="layout" size={15} /> 切换到一页
                   </button>
                 )}
+                <span className="menu-sep" />
+                <button
+                  className="danger"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setConfirmDelete(true);
+                  }}
+                >
+                  <Icon name="trash" size={15} /> 删除（进 .trash）
+                </button>
               </div>
             )}
           </div>
         </div>
       </header>
+
+      {immersive && (
+        <button className="immersive-exit" onClick={() => setImmersive(false)} title="退出沉浸模式（Esc）">
+          <Icon name="close" size={13} />
+          退出沉浸
+        </button>
+      )}
 
       <div className="progress-line" aria-hidden="true">
         <i style={{ width: formatPercent(progress) }} />
@@ -914,7 +948,14 @@ export function ReaderPage({
       )}
 
       <div className="reader-main">
-        {!immersive && !focusMode && !simple && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
+        {!immersive && !simple && (
+          <Toc
+            items={toc}
+            activeId={activeHeading}
+            collapsed={focusMode}
+            onJump={(id) => articleRef.current?.scrollToHeading(id)}
+          />
+        )}
 
         <div className="reader-content">
           {findOpen && mode === 'read' && (
@@ -1011,24 +1052,39 @@ export function ReaderPage({
           )}
         </div>
 
-        {!immersive && !focusMode && !simple && panelOpen && (
-          <aside className="side-panel">
-            <div className="panel-tabs">
-              <button className={panelTab === 'notes' ? 'active' : ''} onClick={() => setPanelTab('notes')}>
-                批注 <span className="count">{annotationList.length}</span>
-              </button>
-              <button className={panelTab === 'backlinks' ? 'active' : ''} onClick={() => setPanelTab('backlinks')}>
-                反链 <span className="count">{doc.backlinks.length}</span>
-              </button>
-              <button className={panelTab === 'mentions' ? 'active' : ''} onClick={() => setPanelTab('mentions')}>
-                提及
-              </button>
-              <button className={panelTab === 'links' ? 'active' : ''} onClick={() => setPanelTab('links')}>
-                出链 <span className="count">{doc.links.length}</span>
-              </button>
-            </div>
+        {!immersive && !simple && (
+          <aside
+            className={`side-panel ${panelOpen && !focusMode ? '' : 'closed'}`}
+            ref={panelRef}
+            aria-hidden={!panelOpen || focusMode}
+          >
+            <div className="side-panel-inner">
+              <div className="panel-head">
+                <div className="panel-tabs">
+                  <button className={panelTab === 'notes' ? 'active' : ''} onClick={() => setPanelTab('notes')}>
+                    批注 <span className="count">{annotationList.length}</span>
+                  </button>
+                  <button className={panelTab === 'backlinks' ? 'active' : ''} onClick={() => setPanelTab('backlinks')}>
+                    反链 <span className="count">{doc.backlinks.length}</span>
+                  </button>
+                  <button className={panelTab === 'mentions' ? 'active' : ''} onClick={() => setPanelTab('mentions')}>
+                    提及
+                  </button>
+                  <button className={panelTab === 'links' ? 'active' : ''} onClick={() => setPanelTab('links')}>
+                    出链 <span className="count">{doc.links.length}</span>
+                  </button>
+                </div>
+                <button
+                  className="icon-btn panel-collapse"
+                  onClick={() => setPanelOpen(false)}
+                  title="收起侧边栏（Ctrl+Shift+B）"
+                  aria-label="收起侧边栏"
+                >
+                  <Icon name="chevrons-right" size={14} />
+                </button>
+              </div>
 
-            <div className="panel-body">
+              <div className="panel-body">
               {panelTab === 'notes' && (
                 <>
                   {annotationList.length > 0 && (
@@ -1134,8 +1190,23 @@ export function ReaderPage({
                   ))}
                 </>
               )}
+              </div>
             </div>
           </aside>
+        )}
+
+        {!immersive && !focusMode && !simple && !panelOpen && (
+          <button
+            className="panel-handle"
+            onClick={() => setPanelOpen(true)}
+            title="展开批注与反链（Ctrl+Shift+B）"
+            aria-label="展开侧边栏"
+          >
+            <Icon name="panel-right" size={15} />
+            <span className="panel-handle-label">批注</span>
+            {annotationList.length > 0 && <span className="panel-handle-count">{annotationList.length}</span>}
+            <Icon name="chevrons-left" size={13} />
+          </button>
         )}
       </div>
 
