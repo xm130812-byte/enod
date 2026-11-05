@@ -97,7 +97,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       refreshTimer.current = null;
       void refreshDocs();
       void refreshTags();
-      void api.stats().then((stats) => setInfo((prev) => (prev ? { ...prev, stats } : prev))).catch(() => {});
+      // 目录树也可能变化（新建目录 / 拖入文件）
+      void api.library().then(setInfo).catch(() => {});
     }, 220);
   }, [refreshDocs, refreshTags]);
 

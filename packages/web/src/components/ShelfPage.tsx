@@ -6,10 +6,11 @@ import { api } from '../api.ts';
 import { basename, dirOf, formatPercent, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
 import type { IconName } from './Icons.tsx';
+import { FolderExplorer } from './FolderExplorer.tsx';
 
 type StatusFilter = 'all' | DocStatus | 'inbox';
 type SortKey = 'recent' | 'added' | 'words' | 'title';
-type ViewMode = 'grid' | 'list' | 'tree' | 'tags';
+type ViewMode = 'explorer' | 'grid' | 'list' | 'tags';
 
 interface ShelfPageProps {
   onOpenDoc: (id: string) => void;
@@ -26,7 +27,7 @@ const STATUS_TABS: { key: StatusFilter; label: string; icon: IconName }[] = [
   { key: 'inbox', label: '收件箱', icon: 'inbox' },
 ];
 
-const VIEW_MODES: readonly ViewMode[] = ['grid', 'list', 'tree', 'tags'];
+const VIEW_MODES: readonly ViewMode[] = ['explorer', 'grid', 'list', 'tags'];
 const SORT_KEYS: readonly SortKey[] = ['recent', 'added', 'words', 'title'];
 const STATUS_KEYS: readonly StatusFilter[] = ['all', 'unread', 'reading', 'done', 'inbox'];
 
@@ -80,7 +81,7 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
     readPreference('mr.shelf.status', STATUS_KEYS, 'all'),
   );
   const [sort, setSort] = useState<SortKey>(() => readPreference('mr.shelf.sort', SORT_KEYS, 'recent'));
-  const [view, setView] = useState<ViewMode>(() => readPreference('mr.shelf.view', VIEW_MODES, 'grid'));
+  const [view, setView] = useState<ViewMode>(() => readPreference('mr.shelf.view', VIEW_MODES, 'explorer'));
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState('');
@@ -265,14 +266,14 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
           </button>
 
           <div className="view-toggle" role="group" aria-label="视图">
+            <button className={view === 'explorer' ? 'active' : ''} onClick={() => setView('explorer')} title="文件夹">
+              <Icon name="folder" size={16} />
+            </button>
             <button className={view === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title="书架">
               <Icon name="grid" size={16} />
             </button>
             <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} title="列表">
               <Icon name="list" size={16} />
-            </button>
-            <button className={view === 'tree' ? 'active' : ''} onClick={() => setView('tree')} title="目录">
-              <Icon name="tree" size={16} />
             </button>
             <button className={view === 'tags' ? 'active' : ''} onClick={() => setView('tags')} title="标签">
               <Icon name="tag" size={16} />
@@ -394,8 +395,8 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
             </div>
           </div>
         </div>
-      ) : view === 'tree' ? (
-        <DirectoryView docs={visible} onOpenDoc={onOpenDoc} />
+      ) : view === 'explorer' ? (
+        <FolderExplorer docs={visible} dirs={info?.dirs ?? []} onOpenDoc={onOpenDoc} />
       ) : view === 'list' ? (
         <div className="shelf-scroll">
           <div className="doc-list">
@@ -639,41 +640,3 @@ function VirtualDocGrid({
   );
 }
 
-function DirectoryView({ docs, onOpenDoc }: { docs: DocSummary[]; onOpenDoc: (id: string) => void }) {
-  const groups = useMemo(() => {
-    const map = new Map<string, DocSummary[]>();
-    for (const doc of docs) {
-      const dir = dirOf(doc.relPath) || '（根目录）';
-      const arr = map.get(dir) ?? [];
-      arr.push(doc);
-      map.set(dir, arr);
-    }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'zh'));
-  }, [docs]);
-
-  return (
-    <div className="shelf-scroll">
-      <div className="tree">
-        {groups.map(([dir, items]) => (
-          <details key={dir} open className="tree-group">
-            <summary>
-              <Icon name="folder" size={16} />
-              <span>{dir}</span>
-              <span className="tree-count">{items.length}</span>
-            </summary>
-            <div className="tree-items">
-              {items.map((doc) => (
-                <button key={doc.id} className="tree-item" onClick={() => onOpenDoc(doc.id)}>
-                  <span className={`status-dot status-${doc.status}`} />
-                  <span className="tree-item-title">{doc.title}</span>
-                  <span className="tree-item-meta">{formatWords(doc.words)}</span>
-                </button>
-              ))}
-            </div>
-          </details>
-        ))}
-        {groups.length === 0 && <p className="muted pad">没有匹配的文档。</p>}
-      </div>
-    </div>
-  );
-}
