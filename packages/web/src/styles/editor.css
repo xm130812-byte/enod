@@ -20,7 +20,7 @@
 }
 
 .editor-host .cm-editor {
-  width: min(100%, calc(var(--reader-measure) + 32px));
+  width: 100%;
   height: 100%;
   background: transparent;
   color: var(--fg);
@@ -37,7 +37,7 @@
   font-family: inherit;
   line-height: inherit;
   overflow-y: auto;
-  padding: 30px 6px 220px;
+  padding: 30px 40px 220px;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }

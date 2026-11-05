@@ -38,6 +38,11 @@ const DENSITIES: { key: AppConfig['density']; label: string; hint: string }[] = 
   { key: 'compact', label: '紧凑', hint: '卡片显示 2 行摘要，一屏更多' },
 ];
 
+const LAYOUTS: { key: AppConfig['readerLayout']; label: string; hint: string }[] = [
+  { key: 'document', label: '文档', hint: '三栏：目录 + 正文 + 批注/反链' },
+  { key: 'focus', label: '专注', hint: '单栏：类似 Typora，隐藏两侧栏' },
+];
+
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const { config, info, applyConfig, refresh } = useLibrary();
   const { toast } = useToast();
@@ -65,6 +70,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         theme: form.theme,
         accent: form.accent,
         density: form.density,
+        readerLayout: form.readerLayout,
         fontFamily: form.fontFamily,
         fontSize: form.fontSize,
         lineHeight: form.lineHeight,
@@ -207,6 +213,22 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   title={density.hint}
                 >
                   {density.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="field">
+            <span>阅读布局</span>
+            <div className="segmented">
+              {LAYOUTS.map((layout) => (
+                <button
+                  key={layout.key}
+                  className={form.readerLayout === layout.key ? 'active' : ''}
+                  onClick={() => patch({ readerLayout: layout.key })}
+                  title={layout.hint}
+                >
+                  {layout.label}
                 </button>
               ))}
             </div>

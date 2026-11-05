@@ -4,8 +4,9 @@
    ============================================================ */
 
 .article {
-  max-width: var(--reader-measure);
-  margin: 0 auto;
+  max-width: none;
+  width: 100%;
+  margin: 0;
   font-family: var(--font-body);
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);

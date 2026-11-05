@@ -8,12 +8,14 @@ export type ThemeName = 'light' | 'dark' | 'sepia' | 'system';
 export type FontFamily = 'serif' | 'sans' | 'mono';
 export type AccentName = 'blue' | 'teal' | 'green' | 'red' | 'amber' | 'graphite';
 export type Density = 'comfortable' | 'compact';
+export type ReaderLayout = 'document' | 'focus';
 
 export interface AppConfig {
   libraryRoot: string | null;
   theme: ThemeName;
   accent: AccentName;
   density: Density;
+  readerLayout: ReaderLayout;
   fontSize: number;
   lineHeight: number;
   measureCh: number;
@@ -30,6 +32,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   theme: 'system',
   accent: 'blue',
   density: 'comfortable',
+  readerLayout: 'document',
   fontSize: 18,
   lineHeight: 1.75,
   measureCh: 68,
@@ -109,11 +112,13 @@ export function sanitizeConfig(input: AppConfig): AppConfig {
     ? input.accent
     : 'blue';
   const density: Density = input.density === 'compact' ? 'compact' : 'comfortable';
+  const readerLayout: ReaderLayout = input.readerLayout === 'focus' ? 'focus' : 'document';
   return {
     libraryRoot: typeof input.libraryRoot === 'string' && input.libraryRoot.trim() ? input.libraryRoot : null,
     theme,
     accent,
     density,
+    readerLayout,
     fontSize: clamp(input.fontSize, CONFIG_LIMITS.fontSize, 18),
     lineHeight: clamp(input.lineHeight, CONFIG_LIMITS.lineHeight, 1.75),
     measureCh: clamp(input.measureCh, CONFIG_LIMITS.measureCh, 68),

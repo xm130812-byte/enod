@@ -18,6 +18,7 @@ export type IconName =
   | 'tag'
   | 'book'
   | 'sidebar'
+  | 'layout'
   | 'copy'
   | 'external'
   | 'note'
@@ -99,6 +100,12 @@ const PATHS: Record<IconName, ReactNode> = {
   sidebar: (
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </>
+  ),
+  layout: (
+    <>
+      <rect x="3" y="4" width="18" height="16" />
       <path d="M9 4v16" />
     </>
   ),

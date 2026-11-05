@@ -111,18 +111,26 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 - 卡片内容：状态点 + 时间（11px）→ 标题 16px/600（最多 2 行）→ 摘要 12.8px/1.6（3 行，compact 2 行）→ 标签 + 字数/批注数。
 - 列表：行高 38px，hover 底色，分隔线 0.5px。
 - 批量条：`--bg-soft` 底，按钮方形，危险操作靠右。
+- **布局记忆**：视图模式 / 排序 / 状态筛选写入 `localStorage`（`mr.shelf.*`），进入文章再返回不会重置成卡片。
 
-### 3.3 阅读器
-- 三栏：目录 220px（右侧 1px 线）｜正文 68ch｜侧栏 336px（左侧 1px 线）。
+### 3.3 阅读器（双布局）
+
+顶栏右侧「布局」按钮在两种布局间切换，选择写入 `config.readerLayout`：
+
+| 布局 | 规则 |
+|---|---|
+| **文档** | 三栏：目录 220px（右边线）｜正文 | 侧栏 336px（左边线）。正文 `max-width: none`，**撑满中间栏，左右不留白**。 |
+| **专注** | 单栏：隐藏目录与侧栏；正文居中 `--reader-measure`（默认 68ch），类似 Typora 的沉浸阅读/写作空间。 |
+
 - 目录项：0 圆角，左侧 2px 透明边；选中为强调色文字 + 2px 左边线，不做底色块。
-- 正文：白底、无卡片容器，靠留白；标题 700，链接无下划线（hover 点状下划线），引用 2px 左边线。
+- 正文：白底、无卡片容器；标题 700，链接无下划线（hover 点状下划线），引用 2px 左边线。
 - 批注高亮：4 色半透明底（40%），0 圆角；hover 加深；定位闪烁用 2px 外框而非发光。
 - 侧栏 tab：下划线式，计数用小号 `--fg-3`。
 - 批注卡：0 圆角、1px 边框；note 为无边框 textarea，focus 时仅底色变化。
 - 反链/提及/出链条目：1px 边框、hover 变深；断链用 `--danger` 文字 + 波浪线。
 
 ### 3.4 写作
-- 编辑区与阅读区同宽同字体，背景 `--bg`，无边框。
+- 编辑区与阅读区同字体；文档布局下同样撑满内容区，专注布局下居中同宽。
 - Live Preview：标题加粗、行内代码底色、链接强调色、图片 2px 圆角。
 - 保存状态：文字 + 1px 边框小标签，不用胶囊。
 - 冲突对话框：左右两栏只读 + 下方可编辑合并结果；0 圆角，1px 边框。
@@ -143,12 +151,13 @@ UI:   -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft Y
 | 主题 | 亮 / 暗 / 护眼 / 跟随系统 | `config.theme` + `data-theme` |
 | 强调色 | 深蓝 / 青 / 绿 / 朱 / 琥珀 / 石墨 | `config.accent` + `data-accent` |
 | 密度 | 舒适 / 紧凑 | `config.density` + `data-density` |
+| 阅读布局 | 文档 / 专注 | `config.readerLayout` + `.focus-mode` |
 | 正文字体 | 衬线 / 无衬线 / 等宽 | `config.fontFamily` |
 | 字号 | 14–30px | `config.fontSize` |
 | 行高 | 1.4–2.4 | `config.lineHeight` |
-| 行宽 | 40–110ch | `config.measureCh` |
+| 行宽 | 40–110ch（专注布局生效） | `config.measureCh` |
 
-全部落到 CSS 变量，主题切换不重排 DOM。
+书架视图 / 排序 / 状态筛选单独存 `localStorage`（`mr.shelf.view` / `.sort` / `.status`），因为它只属于当前设备。
 
 ---
 

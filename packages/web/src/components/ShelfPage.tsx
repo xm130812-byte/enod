@@ -26,6 +26,20 @@ const STATUS_TABS: { key: StatusFilter; label: string; icon: IconName }[] = [
   { key: 'inbox', label: '收件箱', icon: 'inbox' },
 ];
 
+const VIEW_MODES: readonly ViewMode[] = ['grid', 'list', 'tree', 'tags'];
+const SORT_KEYS: readonly SortKey[] = ['recent', 'added', 'words', 'title'];
+const STATUS_KEYS: readonly StatusFilter[] = ['all', 'unread', 'reading', 'done', 'inbox'];
+
+function readPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const value = localStorage.getItem(key);
+    if (value && (allowed as readonly string[]).includes(value)) return value as T;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
 function matchesFilter(doc: DocSummary, filter: StatusFilter): boolean {
   if (filter === 'all') return true;
   if (filter === 'inbox') return dirOf(doc.relPath).toLowerCase().startsWith('inbox');
@@ -62,9 +76,11 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
   const { docs, tags, info, loading, error, refresh, refreshDocs, progress, config } = useLibrary();
   const { toast } = useToast();
   const density = config?.density ?? 'comfortable';
-  const [status, setStatus] = useState<StatusFilter>('all');
-  const [sort, setSort] = useState<SortKey>('recent');
-  const [view, setView] = useState<ViewMode>('grid');
+  const [status, setStatus] = useState<StatusFilter>(() =>
+    readPreference('mr.shelf.status', STATUS_KEYS, 'all'),
+  );
+  const [sort, setSort] = useState<SortKey>(() => readPreference('mr.shelf.sort', SORT_KEYS, 'recent'));
+  const [view, setView] = useState<ViewMode>(() => readPreference('mr.shelf.view', VIEW_MODES, 'grid'));
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState('');
@@ -72,6 +88,17 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings }:
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagInput, setTagInput] = useState('');
   const [tagOpen, setTagOpen] = useState(false);
+
+  // 记住书架布局与筛选，进入文章再返回不会重置
+  useEffect(() => {
+    try {
+      localStorage.setItem('mr.shelf.view', view);
+      localStorage.setItem('mr.shelf.sort', sort);
+      localStorage.setItem('mr.shelf.status', status);
+    } catch {
+      /* ignore */
+    }
+  }, [view, sort, status]);
 
   const counts = useMemo(() => {
     const map: Record<string, number> = { all: docs.length, unread: 0, reading: 0, done: 0, inbox: 0 };

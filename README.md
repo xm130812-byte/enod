@@ -16,7 +16,7 @@
 | 能力 | 状态 | 说明 |
 |---|---|---|
 | 书架 | ✅ | 状态分组、标签筛选、四种视图（书架 / 列表 / 目录 / 标签）、排序、虚拟滚动、批量改状态 / 打标签 |
-| 阅读器 | ✅ | DSH 风格排版、TOC 高亮、沉浸模式、图片灯箱、Shiki 代码高亮 + 行号 + 复制、KaTeX、脚注、任务列表；三主题 + 6 强调色 + 两档密度 |
+| 阅读器 | ✅ | DSH 风格排版、**文档 / 专注两种布局**、TOC 高亮、沉浸模式、图片灯箱、Shiki 代码高亮 + 行号 + 复制、KaTeX、脚注、任务列表；三主题 + 6 强调色 + 两档密度 |
 | 写作 | ✅ | CodeMirror 6 + Live Preview（隐藏标记、标题变大、图片内联、复选框可点）、800ms 自动保存、`Ctrl+S`、冲突检测、粘贴图片 |
 | 批注 | ✅ | 4 色高亮 + 旁注，写回 frontmatter；四级锚点重定位；失效批注单独分组、可重新绑定；导出批注为 Markdown |
 | 双向链接 | ✅ | `[[文档]]`、`[[文档|显示]]`、`[[文档#标题]]`；反链面板、出链、断链标红、悬浮预览、Unlinked Mentions 一键加链 |
@@ -36,9 +36,22 @@
 |---|---|
 | ![书架](docs/screenshots/shelf.png) | ![写作](docs/screenshots/editor.png) |
 
-| 搜索 | 设置 |
+| 专注布局（Typora 式单栏） | 设置 |
 |---|---|
-| ![搜索](docs/screenshots/search.png) | ![设置](docs/screenshots/settings.png) |
+| ![专注布局](docs/screenshots/focus.png) | ![设置](docs/screenshots/settings.png) |
+
+| 全局搜索 | 紧凑密度 |
+|---|---|
+| ![搜索](docs/screenshots/search.png) | ![紧凑密度](docs/screenshots/compact-shelf.png) |
+
+### 阅读布局
+
+阅读页右上角可在两种布局间切换，选择会写入配置，进入/退出文章不会丢：
+
+| 布局 | 说明 |
+|---|---|
+| **文档** | 三栏：目录 + 正文 + 批注/反链面板；正文撑满中间栏，不再有左右留白 |
+| **专注** | Typora 式单栏：隐藏两侧栏，正文居中 68ch，适合连续阅读与写作 |
 
 ### 视觉风格
 

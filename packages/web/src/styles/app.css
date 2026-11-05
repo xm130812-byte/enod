@@ -293,6 +293,11 @@ a {
   background: var(--bg-hover);
   border-color: var(--fg-3);
 }
+.btn.active {
+  background: var(--bg-soft);
+  border-color: var(--line-strong);
+  color: var(--accent);
+}
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1374,6 +1379,23 @@ kbd {
   display: flex;
 }
 
+/* Typora 式专注布局：单栏、居中、无侧栏 */
+.reader.focus-mode .toc,
+.reader.focus-mode .side-panel {
+  display: none;
+}
+.reader.focus-mode .article-wrap {
+  padding: 44px 32px 32px;
+}
+.reader.focus-mode .article {
+  max-width: var(--reader-measure);
+  margin: 0 auto;
+}
+.reader.focus-mode .editor-host .cm-editor {
+  max-width: var(--reader-measure);
+  margin: 0 auto;
+}
+
 .toc {
   width: 220px;
   flex: none;
@@ -1443,9 +1465,9 @@ kbd {
   scrollbar-color: var(--scrollbar) transparent;
 }
 .article-wrap {
-  max-width: calc(var(--reader-measure) + 64px);
-  margin: 0 auto;
-  padding: 36px 32px 20px;
+  max-width: none;
+  margin: 0;
+  padding: 36px 40px 20px;
 }
 .article-foot {
   display: flex;

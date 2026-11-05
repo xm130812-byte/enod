@@ -44,7 +44,7 @@ const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
 const scrollMemory = new Map<string, number>();
 
 export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
-  const { config, info, docs, resolveWiki, refreshDocs } = useLibrary();
+  const { config, info, docs, resolveWiki, refreshDocs, applyConfig } = useLibrary();
   const { toast } = useToast();
 
   const [doc, setDoc] = useState<DocPayload | null>(null);
@@ -622,6 +622,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
   const statusLabelText = doc ? statusLabel(doc.status) : '';
   const theme = config?.theme === 'dark' || (config?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  const focusMode = config?.readerLayout === 'focus';
 
   if (loading) {
     return (
@@ -650,7 +651,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
   }
 
   return (
-    <div className={`reader ${immersive ? 'immersive' : ''}`}>
+    <div className={`reader ${immersive ? 'immersive' : ''} ${focusMode ? 'focus-mode' : ''}`}>
       <header className="reader-head">
         <button className="icon-btn" onClick={onBack} title="返回书架（Esc）">
           <Icon name="back" size={19} />
@@ -710,8 +711,23 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
             </>
           )}
           <button
+            className={`btn btn-ghost small ${focusMode ? 'active' : ''}`}
+            onClick={() => void applyConfig({ readerLayout: focusMode ? 'document' : 'focus' })}
+            title="切换阅读布局：文档（三栏）/ 专注（单栏）"
+          >
+            <Icon name="layout" size={14} />
+            {focusMode ? '文档' : '专注'}
+          </button>
+          <button
             className={`icon-btn ${panelOpen ? 'active' : ''}`}
-            onClick={() => setPanelOpen((v) => !v)}
+            onClick={() => {
+              if (focusMode) {
+                void applyConfig({ readerLayout: 'document' });
+                setPanelOpen(true);
+                return;
+              }
+              setPanelOpen((v) => !v);
+            }}
             title="侧边面板"
           >
             <Icon name="sidebar" size={18} />
@@ -775,7 +791,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
       )}
 
       <div className="reader-main">
-        {!immersive && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
+        {!immersive && !focusMode && panelOpen && <Toc items={toc} activeId={activeHeading} onJump={(id) => articleRef.current?.scrollToHeading(id)} />}
 
         <div className="reader-content">
           {doc.source?.url && mode === 'read' && (
@@ -832,7 +848,7 @@ export function ReaderPage({ docId, onBack, onOpenDoc }: ReaderPageProps) {
           )}
         </div>
 
-        {!immersive && panelOpen && (
+        {!immersive && !focusMode && panelOpen && (
           <aside className="side-panel">
             <div className="panel-tabs">
               <button className={panelTab === 'notes' ? 'active' : ''} onClick={() => setPanelTab('notes')}>

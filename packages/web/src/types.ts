@@ -4,6 +4,7 @@ export type ThemeName = 'light' | 'dark' | 'sepia' | 'system';
 export type FontFamily = 'serif' | 'sans' | 'mono';
 export type AccentName = 'blue' | 'teal' | 'green' | 'red' | 'amber' | 'graphite';
 export type Density = 'comfortable' | 'compact';
+export type ReaderLayout = 'document' | 'focus';
 
 export interface DocSummary {
   id: string;
@@ -83,6 +84,7 @@ export interface AppConfig {
   theme: ThemeName;
   accent: AccentName;
   density: Density;
+  readerLayout: ReaderLayout;
   fontSize: number;
   lineHeight: number;
   measureCh: number;
