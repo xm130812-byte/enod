@@ -71,16 +71,13 @@ export function NewDocDialog({ open, dirs, onClose, onCreated }: NewDocDialogPro
       </label>
       <label className="field">
         <span>目录</span>
-        <div className="field-row">
-          <select value={dir} onChange={(e) => setDir(e.target.value)}>
-            {dirs.map((d) => (
-              <option key={d || 'root'} value={d}>
-                {d || '（书库根目录）'}
-              </option>
-            ))}
-            {!dirs.includes('Inbox') && <option value="Inbox">Inbox</option>}
-          </select>
-          <input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="或输入新目录" />
+        <input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="Inbox 或 books/2026" />
+        <div className="dir-chips">
+          {['Inbox', ...dirs.filter((d) => d && d !== 'Inbox')].slice(0, 8).map((d) => (
+            <button key={d} className={`chip ${dir === d ? 'active' : ''}`} onClick={() => setDir(d)}>
+              {d}
+            </button>
+          ))}
         </div>
       </label>
     </Modal>
