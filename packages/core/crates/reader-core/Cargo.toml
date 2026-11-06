@@ -1,0 +1,38 @@
+[package]
+name = "reader-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "md-reader Rust kernel: index, library, formats, HTTP API"
+
+[dependencies]
+axum = { version = "0.8.9", features = ["json", "http1", "tokio"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+encoding_rs = "0.8.35"
+flate2 = "1.1.11"
+futures-util = "0.3.34"
+htmd = "0.5.6"
+jieba-rs = "0.11.0"
+notify = "8.2.0"
+percent-encoding = "2.3.2"
+quick-xml = "0.42"
+rand = "0.9.5"
+regex = "1.13.1"
+reqwest = { version = "0.13.3", default-features = false, features = ["rustls", "gzip", "brotli", "deflate", "charset"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+scraper = "0.29.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_yaml = "0.9.34"
+sha1 = "0.10.7"
+tokio = { version = "1.53.3", features = ["full"] }
+tower = { version = "0.5.3", features = ["util"] }
+ulid = "3.0.0"
+unicode-normalization = "0.1.26"
+url = "2.5.8"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+tempfile = "3.27.0"

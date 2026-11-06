@@ -1,0 +1,6 @@
+{
+  "name": "mutation.search",
+  "request": { "method": "GET", "path": "/api/v1/search?q=%E5%A5%91%E7%BA%A6&limit=20" },
+  "compare": ["$[*].relPath"],
+  "sortValues": true
+}

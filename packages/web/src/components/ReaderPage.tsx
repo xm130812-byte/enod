@@ -49,6 +49,12 @@ const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
 
 const scrollMemory = new Map<string, number>();
 
+/** 手机/平板是只读入口（PRD §3.3）：隐藏编辑与划线创建，查看批注不受影响。 */
+const MOBILE_READ_ONLY =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(pointer: coarse)').matches &&
+  window.innerWidth <= 768;
+
 export function ReaderPage({
   docId,
   onBack,
@@ -378,6 +384,7 @@ export function ReaderPage({
 
   const enterEdit = (): void => {
     if (!doc) return;
+    if (MOBILE_READ_ONLY) return;
     // 非 markdown 文件是只读浏览（原文件不能被这次编辑覆盖）
     if (doc.editable === false) return;
     setMode('edit');
@@ -793,8 +800,11 @@ export function ReaderPage({
             <span>更新于 {formatRelativeTime(doc.mtime)}</span>
             {doc.encoding !== 'utf8' && <span className="encoding-badge">{doc.encoding.toUpperCase()}</span>}
             {doc.kind && doc.kind !== 'md' && (
-              <span className="encoding-badge" title="原文件只读，正文由格式适配层转换">
-                只读 · {doc.kind.toUpperCase()}
+              <span
+                className="encoding-badge"
+                title={doc.editable ? '原文件可编辑，保存时保持原编码与换行' : '原文件只读，正文由格式适配层转换'}
+              >
+                {doc.editable ? '可编辑' : '只读'} · {doc.kind.toUpperCase()}
               </span>
             )}
             {mode === 'edit' && (
@@ -840,7 +850,7 @@ export function ReaderPage({
               ))}
             </select>
           )}
-          {mode === 'read' && doc.editable !== false && (
+          {mode === 'read' && doc.editable !== false && !MOBILE_READ_ONLY && (
             <button className="icon-btn" onClick={enterEdit} title="编辑（E）" aria-label="编辑">
               <Icon name="edit" size={16} />
             </button>
@@ -894,6 +904,45 @@ export function ReaderPage({
                 >
                   <Icon name="folder" size={15} /> 移动到…
                 </button>
+                <span className="menu-sep" />
+                {doc.kind !== 'md' && (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      window.open(api.exportUrl(doc.id), '_blank', 'noopener');
+                    }}
+                  >
+                    <Icon name="save" size={15} /> 导出 Markdown
+                  </button>
+                )}
+                {(doc.kind === 'docx' || doc.kind === 'html') && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void api
+                          .openWithSystem(doc.id)
+                          .catch((err) => toast(err instanceof Error ? err.message : '无法调起系统程序', 'error'));
+                      }}
+                    >
+                      <Icon name="external" size={15} /> 用系统程序打开
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void api
+                          .convertToMd(doc.id)
+                          .then((created) => {
+                            toast(`已生成「${created.relPath}」`, 'success');
+                            window.location.hash = `#/doc/${created.id}`;
+                          })
+                          .catch((err) => toast(err instanceof Error ? err.message : '转换失败', 'error'));
+                      }}
+                    >
+                      <Icon name="copy" size={15} /> 转为 Markdown 副本
+                    </button>
+                  </>
+                )}
                 <span className="menu-sep" />
                 {!simple && (
                   <button
@@ -1042,6 +1091,7 @@ export function ReaderPage({
               <EditorViewPane
                 ref={editorRef}
                 docId={doc.id}
+                kind={doc.kind}
                 initialBody={bodyRef.current}
                 docs={docs}
                 autosave={config?.autosave ?? true}
@@ -1217,7 +1267,7 @@ export function ReaderPage({
         )}
       </div>
 
-      {selection && mode === 'read' && doc.editable !== false && (
+      {selection && mode === 'read' && !MOBILE_READ_ONLY && (
         <SelectionToolbar info={selection} onColor={(color, withNote) => void createAnnotation(color, withNote)} onCopy={() => void copyQuote()} />
       )}
 

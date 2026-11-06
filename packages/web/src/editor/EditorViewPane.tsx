@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { EditorView, keymap, drawSelection, dropCursor, highlightSpecialChars } from '@codemirror/view';
+import { EditorView, keymap, drawSelection, dropCursor, highlightSpecialChars, lineNumbers } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -7,6 +7,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, type CompletionCont
 import { indentOnInput, bracketMatching } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { createLivePreview } from './livePreview.ts';
+import type { DocKind } from '../types.ts';
 
 export interface EditorHandle {
   getBody: () => string;
@@ -17,6 +18,7 @@ export interface EditorHandle {
 
 interface EditorViewProps {
   docId: string;
+  kind?: DocKind;
   initialBody: string;
   docs: { id: string; title: string; aliases: string[] }[];
   autosave: boolean;
@@ -80,6 +82,8 @@ export const EditorViewPane = forwardRef<EditorHandle, EditorViewProps>(function
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    const kind = callbacks.current.kind ?? 'md';
+    const markdownMode = kind === 'md';
 
     const scheduleAutosave = (): void => {
       if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
@@ -133,13 +137,18 @@ export const EditorViewPane = forwardRef<EditorHandle, EditorViewProps>(function
           indentOnInput(),
           bracketMatching(),
           closeBrackets(),
-          autocompletion({ override: [wikiCompletion] }),
           highlightSelectionMatches(),
-          markdown({ base: markdownLanguage }),
-          createLivePreview({
-            imageUrl: (src) => callbacks.current.imageUrl(src),
-            resolveWiki: (target) => callbacks.current.resolveWiki(target),
-          }),
+          ...(markdownMode ? [autocompletion({ override: [wikiCompletion] })] : []),
+          ...(markdownMode ? [markdown({ base: markdownLanguage })] : []),
+          ...(markdownMode
+            ? [
+                createLivePreview({
+                  imageUrl: (src) => callbacks.current.imageUrl(src),
+                  resolveWiki: (target) => callbacks.current.resolveWiki(target),
+                }),
+              ]
+            : []),
+          ...(callbacks.current.kind === 'sql' ? [lineNumbers()] : []),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({
             spellcheck: 'false',
@@ -186,7 +195,7 @@ export const EditorViewPane = forwardRef<EditorHandle, EditorViewProps>(function
             }
             scheduleAutosave();
           }),
-          EditorView.domEventHandlers({ paste: handlePaste }),
+          ...(markdownMode ? [EditorView.domEventHandlers({ paste: handlePaste })] : []),
         ],
       }),
     });
@@ -202,5 +211,5 @@ export const EditorViewPane = forwardRef<EditorHandle, EditorViewProps>(function
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
 
-  return <div className="editor-host" ref={hostRef} />;
+  return <div className={`editor-host kind-${props.kind ?? 'md'}`} ref={hostRef} />;
 });

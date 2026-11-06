@@ -13,6 +13,32 @@ import type {
 } from './types.ts';
 
 const BASE = '/api/v1';
+const TOKEN_KEY = 'md-reader-token';
+
+/** 移动端只读入口用 `?t=<token>` 首次访问；存下来并从地址栏抹掉。 */
+function bootToken(): void {
+  try {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('t');
+    if (token) {
+      window.localStorage.setItem(TOKEN_KEY, token);
+      url.searchParams.delete('t');
+      window.history.replaceState(null, '', url.toString());
+    }
+  } catch {
+    /* ignore */
+  }
+}
+bootToken();
+
+function authHeaders(): Record<string, string> {
+  try {
+    const token = window.localStorage.getItem(TOKEN_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
 
 export class ApiError extends Error {
   status: number;
@@ -37,7 +63,7 @@ interface RequestOptions {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';
-  const headers: Record<string, string> = { ...(options.headers ?? {}) };
+  const headers: Record<string, string> = { ...authHeaders(), ...(options.headers ?? {}) };
   let body: BodyInit | undefined;
 
   if (options.raw !== undefined) {
@@ -94,6 +120,18 @@ export const api = {
     return request<DocSummary[]>(`/docs${qs ? `?${qs}` : ''}`);
   },
   doc: (id: string) => request<DocPayload>(`/docs/${encodeURIComponent(id)}`),
+  compat: (id: string) =>
+    request<{ editable: boolean; annotatable: boolean; canConvertToMd: boolean }>(
+      `/docs/${encodeURIComponent(id)}/compat`,
+    ),
+  convertToMd: (id: string) =>
+    request<{ id: string; relPath: string }>(`/docs/${encodeURIComponent(id)}/convert`, {
+      method: 'POST',
+      body: { format: 'md' },
+    }),
+  exportUrl: (id: string) => `${BASE}/docs/${encodeURIComponent(id)}/export`,
+  openWithSystem: (id: string) =>
+    request<{ ok: boolean }>(`/docs/${encodeURIComponent(id)}/open`, { method: 'POST' }),
   createDoc: (input: { dir?: string; title?: string; content?: string; tags?: string[] }) =>
     request<DocPayload>('/docs', { method: 'POST', body: input }),
   saveDoc: (
@@ -151,6 +189,24 @@ export const api = {
       { method: 'POST', raw: file, headers: { 'Content-Type': file.type || 'image/png' } },
     ),
 
-  fileUrl: (relPath: string) => `${BASE}/files?path=${encodeURIComponent(relPath)}`,
-  eventsUrl: () => `${BASE}/events`,
+  fileUrl: (relPath: string) => {
+    const token = (() => {
+      try {
+        return window.localStorage.getItem(TOKEN_KEY);
+      } catch {
+        return null;
+      }
+    })();
+    return `${BASE}/files?path=${encodeURIComponent(relPath)}${token ? `&t=${encodeURIComponent(token)}` : ''}`;
+  },
+  eventsUrl: () => {
+    const token = (() => {
+      try {
+        return window.localStorage.getItem(TOKEN_KEY);
+      } catch {
+        return null;
+      }
+    })();
+    return `${BASE}/events${token ? `?t=${encodeURIComponent(token)}` : ''}`;
+  },
 };

@@ -1,0 +1,9 @@
+{
+  "name": "mutation.set-status",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/docs/{{docId}}/status",
+    "body": { "status": "done" }
+  },
+  "compare": ["$.encoding"]
+}

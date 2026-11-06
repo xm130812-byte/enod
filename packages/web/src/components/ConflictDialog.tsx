@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { MergeView } from '@codemirror/merge';
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import type { ConflictDetail, DocPayload } from '../types.ts';
 import { Modal } from './Modal.tsx';
 
@@ -20,14 +23,39 @@ export function ConflictDialog({ doc, conflict, mine, onLoadDisk, onSaveCopy, on
   const [mode, setMode] = useState<'choose' | 'merge'>('choose');
   const [merged, setMerged] = useState(mine);
   const [busy, setBusy] = useState(false);
+  const mergeHost = useRef<HTMLDivElement>(null);
   const disk = conflict.current.body;
   const stats = useMemo(() => ({ disk: countLines(disk), mine: countLines(mine) }), [disk, mine]);
+
+  // 逐行 diff3：磁盘版 / 我的版两栏带行级 diff 与接受控件，第三栏是可编辑结果。
+  useEffect(() => {
+    if (mode !== 'merge' || !mergeHost.current) return;
+    const view = new MergeView({
+      a: {
+        doc: disk,
+        extensions: [EditorState.readOnly.of(true), EditorView.editable.of(false)],
+      },
+      b: {
+        doc: mine,
+        extensions: [
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) setMerged(update.state.doc.toString());
+          }),
+        ],
+      },
+      parent: mergeHost.current,
+      highlightChanges: true,
+      gutter: true,
+      collapseUnchanged: { margin: 3, minSize: 4 },
+    });
+    return () => view.destroy();
+  }, [mode, disk, mine]);
 
   if (mode === 'merge') {
     return (
       <Modal
         title="逐行合并"
-        subtitle={`磁盘版本 ${stats.disk} 行，我的版本 ${stats.mine} 行。左边是磁盘版本，右边是未保存的版本；在下方编辑合并结果。`}
+        subtitle={`磁盘版本 ${stats.disk} 行，我的版本 ${stats.mine} 行。左：磁盘版；中：我的版（可逐块接受）；右：可编辑的合并结果。`}
         onClose={onClose}
         wide
         dismissable={!busy}
@@ -53,20 +81,18 @@ export function ConflictDialog({ doc, conflict, mine, onLoadDisk, onSaveCopy, on
           </>
         }
       >
-        <div className="merge-grid">
-          <section>
-            <h4>磁盘版本</h4>
-            <pre className="merge-pre">{disk}</pre>
-          </section>
-          <section>
-            <h4>我的版本</h4>
-            <pre className="merge-pre">{mine}</pre>
+        <div className="merge3">
+          <div className="merge3-diff" ref={mergeHost} />
+          <section className="merge3-result">
+            <h4>合并结果（可编辑）</h4>
+            <textarea
+              className="merge-textarea"
+              value={merged}
+              onChange={(e) => setMerged(e.target.value)}
+              spellCheck={false}
+            />
           </section>
         </div>
-        <label className="field">
-          <span>合并结果（可编辑）</span>
-          <textarea className="merge-textarea" value={merged} onChange={(e) => setMerged(e.target.value)} spellCheck={false} />
-        </label>
       </Modal>
     );
   }

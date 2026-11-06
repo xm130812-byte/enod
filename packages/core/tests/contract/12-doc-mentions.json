@@ -1,0 +1,8 @@
+{
+  "name": "docs.mentions.status-only",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/docs/{{doc:tech/SQLite FTS5 中文检索.md}}/mentions"
+  },
+  "compare": []
+}

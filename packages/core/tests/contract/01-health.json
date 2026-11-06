@@ -1,0 +1,5 @@
+{
+  "name": "health",
+  "request": { "method": "GET", "path": "/api/v1/health" },
+  "compare": ["$.ok", "$.version", "$.platform"]
+}

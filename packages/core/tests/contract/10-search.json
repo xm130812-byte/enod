@@ -1,0 +1,6 @@
+{
+  "name": "search.sqlite",
+  "request": { "method": "GET", "path": "/api/v1/search?q=SQLite&limit=20" },
+  "compare": ["$[*].relPath", "$[*].id", "$[*].status"],
+  "sortValues": true
+}

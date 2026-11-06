@@ -1,0 +1,145 @@
+/* 移动端只读（P1）：单栏、抽屉式信息、底部不挡内容。断点 768px。 */
+
+@media (max-width: 768px) {
+  .shelf-head {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .shelf-head h1 {
+    font-size: 18px;
+  }
+
+  .shelf-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 14px;
+  }
+
+  .shelf-scroll {
+    padding: 10px 12px 48px;
+  }
+
+  .doc-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+
+  .doc-card {
+    padding: 12px;
+  }
+
+  .reader-head {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .reader-title h1 {
+    font-size: 17px;
+  }
+
+  .reader-meta {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 11px;
+  }
+
+  .reader-meta .encoding-badge {
+    display: inline-flex;
+  }
+
+  .reader-actions {
+    gap: 4px;
+  }
+
+  .reader-actions .status-select,
+  .reader-actions .icon-btn[title*='专注'] {
+    display: none;
+  }
+
+  .reader-main {
+    display: block;
+  }
+
+  .toc,
+  .side-panel,
+  .panel-handle {
+    display: none !important;
+  }
+
+  .reader-content {
+    width: 100%;
+    max-width: 100%;
+    padding: 0 12px;
+  }
+
+  .article-wrap {
+    max-width: 100%;
+    padding: 10px 2px 56px;
+  }
+
+  .article {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+
+  .article pre {
+    font-size: 12.5px;
+  }
+
+  .search-overlay .search-panel {
+    width: calc(100vw - 20px);
+    max-height: 80vh;
+  }
+
+  .clip-dialog,
+  .modal {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+  }
+
+  .editor-pane .cm-editor {
+    font-size: 14px;
+  }
+}
+
+/* 万卷书架的文件夹树在手机上占掉一半宽度：收成单栏，只留文件列表。 */
+@media (max-width: 768px) {
+  .explorer {
+    grid-template-columns: 1fr !important;
+  }
+
+  .folder-pane {
+    display: none !important;
+  }
+
+  .file-pane {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .file-head {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .file-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+  }
+
+  .file-path,
+  .file-tags {
+    display: none;
+  }
+
+  .simple-side {
+    display: none !important;
+  }
+
+  .simple-main {
+    width: 100%;
+  }
+}
+

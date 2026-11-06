@@ -15,36 +15,26 @@ import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
  */
 import langJavaScript from 'shiki/langs/javascript.mjs';
 import langTypeScript from 'shiki/langs/typescript.mjs';
-import langTsx from 'shiki/langs/tsx.mjs';
-import langJsx from 'shiki/langs/jsx.mjs';
 import langJson from 'shiki/langs/json.mjs';
 import langBash from 'shiki/langs/bash.mjs';
-import langPowerShell from 'shiki/langs/powershell.mjs';
 import langPython from 'shiki/langs/python.mjs';
 import langHtml from 'shiki/langs/html.mjs';
 import langCss from 'shiki/langs/css.mjs';
 import langSql from 'shiki/langs/sql.mjs';
-import langMarkdown from 'shiki/langs/markdown.mjs';
-import langYaml from 'shiki/langs/yaml.mjs';
-import langDiff from 'shiki/langs/diff.mjs';
 import themeGithubLight from 'shiki/themes/github-light.mjs';
 import themeGithubDark from 'shiki/themes/github-dark.mjs';
 
+// Q5：体积优先。内置 8 种语法；tsx/jsx/powershell/markdown/yaml/diff 超出预算，
+// 一律降级为纯文本（代码块仍可复制），不再打进包里。
 const LANGS: LanguageInput[] = [
   langJavaScript,
   langTypeScript,
-  langTsx,
-  langJsx,
   langJson,
   langBash,
-  langPowerShell,
   langPython,
   langHtml,
   langCss,
   langSql,
-  langMarkdown,
-  langYaml,
-  langDiff,
 ];
 
 const THEMES: ThemeInput[] = [themeGithubLight, themeGithubDark];

@@ -1,0 +1,8 @@
+{
+  "name": "mutation.delete-annotation",
+  "request": {
+    "method": "DELETE",
+    "path": "/api/v1/docs/{{docId}}/annotations/{{annId}}"
+  },
+  "compare": ["$.count"]
+}

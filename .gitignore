@@ -23,3 +23,10 @@ Thumbs.db
 tools/
 
 sample-library/temp/
+
+# v4 release artifacts
+release/
+packages/core/tests/bloat-*.txt
+packages/shell/src-tauri/binaries/
+packages/shell/src-tauri/target/
+scripts/tauri-install.log

@@ -1,0 +1,3 @@
+# 只对 Linux 目标加体积参数；Windows MSVC 不认识 -Wl，macOS 也不需要。
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "force-unwind-tables=no", "-C", "link-arg=-Wl,--gc-sections"]

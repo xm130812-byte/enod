@@ -1,0 +1,15 @@
+{
+  "name": "config.get",
+  "request": { "method": "GET", "path": "/api/v1/config" },
+  "compare": [
+    "$.theme",
+    "$.accent",
+    "$.density",
+    "$.readerLayout",
+    "$.fontFamily",
+    "$.autosave",
+    "$.syncProgress",
+    "$.showLineNumbers",
+    "$.lastDocId"
+  ]
+}

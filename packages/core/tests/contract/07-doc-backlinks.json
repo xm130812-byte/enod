@@ -1,0 +1,9 @@
+{
+  "name": "docs.backlinks",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/docs/{{doc:tech/SQLite FTS5 中文检索.md}}/backlinks"
+  },
+  "compare": ["$[*].srcId", "$[*].relPath", "$[*].srcTitle"],
+  "sortValues": true
+}

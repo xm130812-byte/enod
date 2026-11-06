@@ -1,0 +1,5 @@
+{
+  "name": "mutation.get-after-patch",
+  "request": { "method": "GET", "path": "/api/v1/docs/{{docId}}" },
+  "compare": ["$.body", "$.status", "$.title"]
+}

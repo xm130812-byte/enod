@@ -76,6 +76,8 @@ function Shell() {
   const [dragOver, setDragOver] = useState(false);
   const [appMode, setAppMode] = useState<'simple' | 'complex'>(() => {
     try {
+      // 移动端没有横向空间，直接进入「万卷」单栏书架；桌面保持「一页」。
+      if (window.innerWidth <= 768) return 'complex';
       return localStorage.getItem('mr.app.mode') === 'complex' ? 'complex' : 'simple';
     } catch {
       return 'simple';

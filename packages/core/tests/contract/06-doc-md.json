@@ -1,0 +1,28 @@
+{
+  "name": "docs.get.md",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/docs/{{doc:tech/SQLite FTS5 中文检索.md}}"
+  },
+  "compare": [
+    "$.id",
+    "$.relPath",
+    "$.title",
+    "$.tags",
+    "$.aliases",
+    "$.status",
+    "$.progress",
+    "$.words",
+    "$.excerpt",
+    "$.encoding",
+    "$.eol",
+    "$.hasFrontmatter",
+    "$.frontmatter.title",
+    "$.body",
+    "$.headings[*].text",
+    "$.headings[*].level",
+    "$.links[*].dstRaw",
+    "$.links[*].broken"
+  ],
+  "sortValues": false
+}

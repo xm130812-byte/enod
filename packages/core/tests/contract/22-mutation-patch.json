@@ -1,0 +1,10 @@
+{
+  "name": "mutation.patch-body",
+  "request": {
+    "method": "PATCH",
+    "path": "/api/v1/docs/{{docId}}",
+    "body": { "body": "改过的正文\n", "baseHash": "{{docHash}}" }
+  },
+  "compare": ["$.encoding", "$.reencoded"],
+  "capture": { "docHash": "$.hash" }
+}

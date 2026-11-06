@@ -1,0 +1,9 @@
+{
+  "name": "mutation.patch-annotation",
+  "request": {
+    "method": "PATCH",
+    "path": "/api/v1/docs/{{docId}}/annotations/{{annId}}",
+    "body": { "note": "n2", "color": "green" }
+  },
+  "compare": ["$.annotation.note", "$.annotation.color", "$.count"]
+}

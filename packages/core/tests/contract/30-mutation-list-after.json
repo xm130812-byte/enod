@@ -1,0 +1,5 @@
+{
+  "name": "mutation.list-after-delete",
+  "request": { "method": "GET", "path": "/api/v1/docs?status=all&q=%E5%A5%91%E7%BA%A6" },
+  "compare": ["$[*].relPath"]
+}

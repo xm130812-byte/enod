@@ -1,0 +1,5 @@
+{
+  "name": "mutation.delete-doc",
+  "request": { "method": "DELETE", "path": "/api/v1/docs/{{docId}}" },
+  "compare": []
+}

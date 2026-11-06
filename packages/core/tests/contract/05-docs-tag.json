@@ -1,0 +1,6 @@
+{
+  "name": "docs.list.by-tag",
+  "request": { "method": "GET", "path": "/api/v1/docs?status=all&tag=%E5%B7%A5%E7%A8%8B" },
+  "compare": ["$[*].relPath", "$[*].tags"],
+  "sortValues": true
+}

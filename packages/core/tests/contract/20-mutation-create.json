@@ -1,0 +1,14 @@
+{
+  "name": "mutation.create",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/docs",
+    "body": {
+      "title": "契约测试文档",
+      "dir": "Inbox",
+      "content": "# 契约测试\n\n正文 contract body"
+    }
+  },
+  "compare": ["$.title", "$.kind", "$.relPath", "$.status", "$.hasFrontmatter", "$.editable"],
+  "capture": { "docId": "$.id", "docHash": "$.rawHash" }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "docs.list.all",
+  "request": { "method": "GET", "path": "/api/v1/docs?status=all&sort=title" },
+  "compare": ["$[*].relPath"],
+  "sortValues": true
+}

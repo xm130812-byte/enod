@@ -1,0 +1,7 @@
+{
+  "source": "tech/schema.sql",
+  "kind": "sql",
+  "title": "",
+  "warnings": [],
+  "markdown": "```sql\n-- ============================================================\n-- md-reader 的索引表结构\n-- 设计取舍见 [[为什么零原生模块]] 与 [[本地优先]]\n-- ============================================================\n\nPRAGMA journal_mode = WAL;\nPRAGMA synchronous = NORMAL;\n\nCREATE TABLE IF NOT EXISTS docs (\n  id          TEXT PRIMARY KEY,\n  rel_path    TEXT UNIQUE NOT NULL,\n  title       TEXT NOT NULL,\n  status      TEXT NOT NULL DEFAULT 'unread',\n  words       INTEGER NOT NULL DEFAULT 0,\n  indexed_at  INTEGER NOT NULL\n);\n\n-- 全文索引：正文先分词再拼接，CJK 用 bigram 兜底\nCREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(\n  doc_id UNINDEXED,\n  title_tokens,\n  body_tokens,\n  bigrams,\n  tokenize = 'unicode61'\n);\n\n-- 双链：dst_id 为空表示断链\nCREATE TABLE IF NOT EXISTS links (\n  src_id     TEXT NOT NULL,\n  dst_id     TEXT,\n  dst_raw    TEXT NOT NULL,\n  dst_anchor TEXT,\n  kind       TEXT NOT NULL DEFAULT 'wiki'\n);\n\nINSERT INTO docs (id, rel_path, title, status, words, indexed_at)\nVALUES ('01M6PEGRCN1EKDDN8MCEYVHY88', 'essays/本地优先.md', '本地优先', 'reading', 323, 1793900000);\n\nSELECT d.title, d.words, COUNT(l.dst_id) AS outlinks\nFROM docs d\nLEFT JOIN links l ON l.src_id = d.id\nGROUP BY d.id\nORDER BY d.indexed_at DESC\nLIMIT 20;\n```\n"
+}

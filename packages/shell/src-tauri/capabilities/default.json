@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "md-reader shell 的最小权限集",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

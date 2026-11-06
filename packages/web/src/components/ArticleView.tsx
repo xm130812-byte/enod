@@ -25,6 +25,22 @@ interface ArticleViewProps {
   onImage: (src: string, alt: string) => void;
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** txt / sql 是原始文本，不能按 markdown 渲染（会被吃掉换行和符号）。 */
+function renderPlainText(body: string, kind: 'txt' | 'sql'): string {
+  if (kind === 'sql') {
+    return `<pre class="code-block sql-view"><code class="language-sql">${escapeHtml(body)}</code></pre>`;
+  }
+  return `<pre class="txt-view">${escapeHtml(body)}</pre>`;
+}
+
 function sanitize(root: HTMLElement): void {
   root.querySelectorAll('script,iframe,object,embed,link,meta,form').forEach((node) => node.remove());
   for (const el of root.querySelectorAll('*')) {
@@ -148,6 +164,16 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     const el = containerRef.current;
     if (!el) return;
     let cancelled = false;
+    if (doc.kind === 'txt' || doc.kind === 'sql') {
+      el.innerHTML = renderPlainText(doc.body, doc.kind);
+      propsRef.current.onToc([]);
+      void highlightCodeBlocks(el, propsRef.current.theme).then(() => {
+        if (!cancelled) applyAnchors();
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     el.innerHTML = renderMarkdown(doc.body, {
       resolveWiki: (target) => propsRef.current.resolveWiki(target),
     });

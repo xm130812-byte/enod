@@ -1,0 +1,10 @@
+{
+  "name": "mutation.add-annotation",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/docs/{{docId}}/annotations",
+    "body": { "exact": "契约测试", "note": "n", "color": "blue" }
+  },
+  "compare": ["$.annotation.exact", "$.annotation.color", "$.annotation.note", "$.count"],
+  "capture": { "annId": "$.annotation.id" }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "preview",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/preview?target=SQLite%20FTS5%20%E4%B8%AD%E6%96%87%E6%A3%80%E7%B4%A2"
+  },
+  "compare": ["$.id", "$.title", "$.excerpt"]
+}

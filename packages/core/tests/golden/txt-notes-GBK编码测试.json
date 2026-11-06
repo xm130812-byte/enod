@@ -1,0 +1,7 @@
+{
+  "source": "notes/GBK编码测试.txt",
+  "kind": "txt",
+  "title": "",
+  "warnings": [],
+  "markdown": "GBK 编码的纯文本  \n\n这个文件是 GB18030 编码、CRLF 换行的，用来验证 txt 的编码保真：  \n读取时不应该出现乱码，也不应该被当成 UTF-8 强行解码。  \n\n它同样能参与双链：[[本地优先]]。  \n"
+}

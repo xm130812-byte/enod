@@ -395,3 +395,21 @@ mark.ann.ann-flash {
 :root[data-theme='dark'] .article pre.code-block.shiki span {
   filter: brightness(1.06);
 }
+
+/* ------------------------------------------------------------ txt / sql 原文 */
+
+.article .txt-view {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.94em;
+  line-height: 1.85;
+  background: transparent;
+  padding: 0;
+}
+
+.article .sql-view {
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
