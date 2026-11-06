@@ -9,9 +9,9 @@
 |---|---|---|
 | **M7 内核迁移** | ✅ 完成 | Node ↔ Rust 契约 **23/23** 通过 |
 | **M7.5 高危项对齐** | ✅ 完成 | 金标准 **6/6 逐字一致**；分词召回 **98.01%**；剪藏真网页跑通 |
-| **M8 多端壳** | 🟡 Linux **已出 deb 且运行冒烟通过**；Win/mac 待 CI | deb **9.16 MiB**；`shell-smoke.sh`：壳拉起内核 → `chrome --app=http://…` → health **200** |
+| **M8 多端壳** | 🟡 **Windows NSIS + Linux deb 已装/已跑通**；macOS runner 不可用 | Win 安装包 **6.78 MiB**，装后 WebView2 打开书架；Linux deb **9.19 MiB**，shell 冒烟通过 |
 | **M9 编辑体验** | ✅ 完成（含三栏 diff3） | txt/sql 保编码保 EOL **20/20**；Playwright 真浏览器 **12/12**；docx 三路径 |
-| **M10 体积与发布** | 🟡 内核/web/便携包达标，安装包待 CI | 二进制 **9.86 MiB**（10.35 MB）；web **2.43 MB**；portable tar.gz **6.56 MB** |
+| **M10 体积与发布** | ✅ 安装包达标（Win/Linux） | Win NSIS **6.78 MiB**、Linux deb **9.19 MiB**；内核 9.87 MiB、web 2.43 MB |
 | **M11 移动只读** | ✅ 服务端 + 响应式 + 390px 实测 | token **401/200** + Cookie；390×844 无横向溢出、侧栏隐藏 |
 
 ## 1. 代码落点
@@ -211,12 +211,39 @@ bash scripts/shell-smoke.sh
 - 壳从内核 stdout 解析端口 → 用 `--app=<url>` 调 Chrome（探测 PATH 里的 google-chrome）；
 - 假 Chrome 记录参数后退出，脚本再请求 `/api/v1/health`，确认内核仍在服务。
 
-### 5.2 Windows / macOS
+### 5.3 Windows NSIS：安装 + WebView2 实测
 
-- Windows 侧账号非管理员，缺 MSVC；macOS 无机器。
-- CI 已配置 `.github/workflows/v4-build.yml`（windows-latest / ubuntu-22.04 / macos-14），
-  产出 NSIS / dmg / deb（Linux 改为 deb，理由同上）。首次 CI 可能需要按实际 `tauri`
-  小版本微调 tray/menu API；本地 Linux 编译已证明源码 API 基本正确。
+CI（windows-latest）产物 `md-reader_0.1.0_x64-setup.exe` = **7,113,784 B（6.78 MiB）**。
+
+在 Windows 主机上实测：
+
+```powershell
+# 静默安装到 %LOCALAPPDATA%\md-reader
+md-reader_0.1.0_x64-setup.exe /S
+# 启动壳 + 内核（WebView2 远程调试用于验收）
+md-reader-shell.exe
+```
+
+结果：
+
+- 安装目录：`md-reader-core.exe`（9.35 MB）+ `md-reader-shell.exe`（3.73 MB）+ `web/`；
+- 首次启动发现并修复了一个**真实迁移 bug**：v3 的 `index.db` 没有 `kind` 列，
+  `schema.sql` 里的 `CREATE INDEX docs_kind` 在 ALTER 之前执行会直接报
+  `no such column: kind`，壳 25s 超时退出。已把索引移到 `migrate()` 的 ALTER 之后，
+  并新增 `migrates_v3_database_without_kind` 回归测试。
+- 修复后重新装包：壳 + 内核常驻，WebView2（Edg/156）通过 CDP 验证到
+  `.shelf`、19 篇文档、原有批注都在；截图
+  `docs/screenshots/v4-windows-installed.png`。
+- 卸载：`uninstall.exe /S` 干净移除安装目录。
+
+### 5.4 macOS：runner 拿不到
+
+macOS job 在 **1 秒内 cancelled**，`runner_name` 为空、没有任何 step 执行 —— 不是编译错误。
+与社区同类现象一致（macOS runner acquisition failure / 计费限制）：
+
+- 已把 macOS 拆成独立 workflow `.github/workflows/macos-build.yml`，
+  避免它把 Windows/Linux 主 workflow 带成 `cancelled`；
+- 需要仓库账号启用 macOS runner（Billing/额度）或接 self-hosted Mac 后再触发。
 
 ## 6. M10：体积
 
@@ -230,8 +257,9 @@ bash packages/core/release.sh
 | web 资源 | ≤2.5 MB | **2,426,830 B（2.43 MB）** |
 | 二进制 xz -9 | — | **4,815,252 B（4.82 MB）**，安装包压缩后近似 |
 | Linux 便携包 tar.gz | ≤15 MB | **6,557,108 B（6.56 MB）**，内核 + web + 启动脚本 |
-| **Linux deb（M8）** | ≤15 MB | **9.16 MiB**；安装后 18,402 KB（≤20 MB） |
-| 安装包（Win/mac） | ≤12–15 MB | 待 CI；按 4.8 MB 内核 + 0.7 MB web + 3–4 MB 壳估算 ~9–10 MB |
+| **Windows NSIS（M8）** | ≤12–15 MB | **7,113,784 B（6.78 MiB）**，per-user 安装 |
+| **Linux deb（M8）** | ≤12–15 MB | **9,640,602 B（9.19 MiB）**；安装后 18,402 KB（≤20 MB） |
+| macOS dmg | ≤15 MB | 待 runner 可用；代码与 workflow 已就绪 |
 
 - 为压体积：`opt-level="z"`、fat LTO、`panic=abort`、strip；Shiki 只内置 8 种语法
   （js/ts/json/bash/python/html/css/sql），其余按 Q5 降级为纯文本。
@@ -270,6 +298,8 @@ bash packages/core/lan-smoke.sh
    WebKit 打进去会远超 15 MB，因此 Linux 只出 deb。
 5. **二进制超目标 0.35 MB**：10.35 MB vs ≤10 MB（9.87 MiB）；继续压需要换精简 jieba 词典
    或改静态链接，会牵动已验收的分词召回，本轮未冒险。
+6. **macOS 安装包未产出**：runner 在 1 秒内 cancelled（无 runner 分配），与代码无关；
+   workflow 已拆到 `macos-build.yml`，等账号 Billing/macOS runner 可用后重试。
 
 ## 9. 复跑清单
 

@@ -1,0 +1,52 @@
+name: v4 macos build
+
+# 单独拆出来：部分账号/仓库暂时拿不到 macOS runner（job 会 1 秒内 cancelled），
+# 拆开后 Windows/Linux 的主 workflow 不会被它带成 cancelled，macOS 可单独重试。
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v4*']
+
+jobs:
+  macos:
+    name: macOS arm64 (dmg)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Web dependencies + build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Rust core (release)
+        run: cargo build --release -p reader-cli --manifest-path packages/core/Cargo.toml --target aarch64-apple-darwin
+
+      - name: Stage sidecar
+        run: node scripts/prepare-sidecar.mjs aarch64-apple-darwin
+
+      - name: Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Bundle
+        working-directory: packages/shell/src-tauri
+        run: cargo tauri build --target aarch64-apple-darwin --bundles dmg
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: md-reader-aarch64-apple-darwin
+          path: packages/shell/src-tauri/target/**/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
+          retention-days: 14

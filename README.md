@@ -4,7 +4,7 @@
 
 本地优先：文件就是数据库。元数据、批注、链接全部写在 Markdown 的 frontmatter 与正文里，同步交给坚果云 / WebDAV / Git 即可。
 
-> 当前状态：**v4 内核已落地**。Rust 内核通过 Node 契约测试 23/23、转换金标准 6/6、分词召回 98.01%；txt/sql 可编辑、docx 批注 + 转 md、三栏 diff3、真浏览器 e2e 12/12 已验收。Linux 壳已产出 deb（9.16 MiB）；Windows/macOS 安装包走 CI。见 **[docs/V4-STATUS.md](docs/V4-STATUS.md)**。
+> 当前状态：**v4 内核已落地**。Rust 内核通过 Node 契约测试 23/23、转换金标准 6/6、分词召回 98.01%；txt/sql 可编辑、docx 批注 + 转 md、三栏 diff3、真浏览器 e2e 12/12 已验收。Windows NSIS（6.78 MiB）与 Linux deb（9.19 MiB）已装通；macOS 等 runner。见 **[docs/V4-STATUS.md](docs/V4-STATUS.md)**。
 > 需求基线：[PRD-v4](../PRD-v4.md)。
 
 ![一页](docs/screenshots/simple.png)
