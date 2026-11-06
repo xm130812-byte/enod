@@ -134,8 +134,8 @@ export function ReaderPage({
       /* ignore */
     }
     const panel = panelRef.current as (HTMLElement & { inert?: boolean }) | null;
-    if (panel) panel.inert = !panelOpen || simple || focusMode;
-  }, [panelOpen, simple, focusMode, doc?.id]);
+    if (panel) panel.inert = !panelOpen || focusMode;
+  }, [panelOpen, focusMode, doc?.id]);
 
   /* ---------------------------------------------------------------- load */
 
@@ -378,6 +378,8 @@ export function ReaderPage({
 
   const enterEdit = (): void => {
     if (!doc) return;
+    // 非 markdown 文件是只读浏览（原文件不能被这次编辑覆盖）
+    if (doc.editable === false) return;
     setMode('edit');
     modeRef.current = 'edit';
     setDirty(false);
@@ -677,7 +679,7 @@ export function ReaderPage({
         }, 30);
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'b' && !simple) {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'b') {
         event.preventDefault();
         setPanelOpen((value) => !value);
         return;
@@ -790,6 +792,11 @@ export function ReaderPage({
             <span>{formatWords(doc.words)}</span>
             <span>更新于 {formatRelativeTime(doc.mtime)}</span>
             {doc.encoding !== 'utf8' && <span className="encoding-badge">{doc.encoding.toUpperCase()}</span>}
+            {doc.kind && doc.kind !== 'md' && (
+              <span className="encoding-badge" title="原文件只读，正文由格式适配层转换">
+                只读 · {doc.kind.toUpperCase()}
+              </span>
+            )}
             {mode === 'edit' && (
               <span className={`save-state ${saveState} ${dirty ? 'dirty' : ''}`}>
                 {saveState === 'saving'
@@ -833,7 +840,7 @@ export function ReaderPage({
               ))}
             </select>
           )}
-          {mode === 'read' && (
+          {mode === 'read' && doc.editable !== false && (
             <button className="icon-btn" onClick={enterEdit} title="编辑（E）" aria-label="编辑">
               <Icon name="edit" size={16} />
             </button>
@@ -1052,7 +1059,7 @@ export function ReaderPage({
           )}
         </div>
 
-        {!immersive && !simple && (
+        {!immersive && (
           <aside
             className={`side-panel ${panelOpen && !focusMode ? '' : 'closed'}`}
             ref={panelRef}
@@ -1195,7 +1202,7 @@ export function ReaderPage({
           </aside>
         )}
 
-        {!immersive && !focusMode && !simple && !panelOpen && (
+        {!immersive && !focusMode && !panelOpen && (
           <button
             className="panel-handle"
             onClick={() => setPanelOpen(true)}
@@ -1210,7 +1217,7 @@ export function ReaderPage({
         )}
       </div>
 
-      {selection && mode === 'read' && (
+      {selection && mode === 'read' && doc.editable !== false && (
         <SelectionToolbar info={selection} onColor={(color, withNote) => void createAnnotation(color, withNote)} onCopy={() => void copyQuote()} />
       )}
 

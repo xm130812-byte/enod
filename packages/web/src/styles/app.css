@@ -1263,8 +1263,7 @@ kbd {
   text-overflow: ellipsis;
 }
 
-.reader.simple-view .toc,
-.reader.simple-view .side-panel {
+.reader.simple-view .toc {
   display: none;
 }
 .reader.simple-view .article-wrap {

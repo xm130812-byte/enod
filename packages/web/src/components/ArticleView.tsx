@@ -46,6 +46,39 @@ function resolveImages(root: HTMLElement): void {
   }
 }
 
+/**
+ * markdown-it 对「**加粗：**中文」这种"闭合标记前是中文标点、后面紧跟汉字"的写法
+ * 会保留成字面量（CommonMark 的 flanking 判定）。合法强调在渲染时已经被消费掉，
+ * 所以这里把文本节点里剩余的 **x** 兜底转成 <strong>，不会碰到代码块。
+ */
+function unstickEmphasis(root: HTMLElement): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (!node.data.includes('**')) continue;
+    const tag = (node.parentElement?.tagName ?? '').toLowerCase();
+    if (tag === 'code' || tag === 'pre') continue;
+    nodes.push(node);
+  }
+  for (const node of nodes) {
+    const parts = node.data.split(/(\*\*[^*\n]+\*\*)/g);
+    if (parts.length < 3) continue;
+    const frag = document.createDocumentFragment();
+    for (const part of parts) {
+      const match = /^\*\*([^*\n]+)\*\*$/.exec(part);
+      if (match) {
+        const strong = document.createElement('strong');
+        strong.textContent = match[1]!;
+        frag.append(strong);
+      } else if (part) {
+        frag.append(document.createTextNode(part));
+      }
+    }
+    node.replaceWith(frag);
+  }
+}
+
 function readToc(root: HTMLElement): TocItem[] {
   return [...root.querySelectorAll<HTMLElement>('h1, h2, h3')].map((el) => ({
     id: el.id || el.textContent?.trim() || String(Math.random()),
@@ -119,6 +152,7 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
       resolveWiki: (target) => propsRef.current.resolveWiki(target),
     });
     sanitize(el);
+    unstickEmphasis(el);
     // 顶栏已经显示标题；正文首个 H1 与标题相同时不重复渲染
     const first = el.firstElementChild as HTMLElement | null;
     if (first?.tagName === 'H1' && (first.textContent ?? '').trim() === doc.title.trim()) first.remove();

@@ -21,7 +21,12 @@ export interface DocSummary {
   size: number;
   annCount: number;
   created: string | null;
+  /** 文件格式：md 之外都是只读浏览（正文由服务端适配层转成 markdown） */
+  kind?: DocKind;
+  editable?: boolean;
 }
+
+export type DocKind = 'md' | 'txt' | 'sql' | 'html' | 'docx';
 
 export interface Annotation {
   id: string;
