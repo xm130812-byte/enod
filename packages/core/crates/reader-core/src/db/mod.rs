@@ -99,6 +99,8 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     if !docs_cols.iter().any(|c| c == "meta_path") {
         conn.execute_batch("ALTER TABLE docs ADD COLUMN meta_path TEXT;")?;
     }
+    // v3 旧库没有 kind 列，必须先补列再建索引（schema.sql 里不能提前建）
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS docs_kind ON docs(kind);")?;
 
     let expected = [
         "doc_id",
@@ -957,8 +959,54 @@ fn search_rows(
     rows.collect()
 }
 
-fn base64url_8(input: &str) -> String {
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// v3 旧库没有 kind/meta_path，迁移必须先 ALTER 再建 docs_kind 索引。
+    #[test]
+    fn migrates_v3_database_without_kind() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE docs (
+               id TEXT PRIMARY KEY, rel_path TEXT UNIQUE NOT NULL, mtime INTEGER NOT NULL,
+               size INTEGER NOT NULL, hash TEXT NOT NULL, title TEXT NOT NULL,
+               tags TEXT NOT NULL DEFAULT '[]', aliases TEXT NOT NULL DEFAULT '[]',
+               status TEXT NOT NULL DEFAULT 'unread', progress REAL NOT NULL DEFAULT 0,
+               words INTEGER NOT NULL DEFAULT 0, excerpt TEXT NOT NULL DEFAULT '',
+               source_url TEXT, encoding TEXT NOT NULL DEFAULT 'utf8',
+               eol TEXT NOT NULL DEFAULT '\\n', created TEXT,
+               indexed_at INTEGER NOT NULL, ann_count INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE VIRTUAL TABLE docs_fts USING fts5(
+               doc_id UNINDEXED, rel_path, title_tokens, body_tokens,
+               tags_tokens, notes_tokens, bigrams, tokenize = 'unicode61'
+             );
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+
+        let cols = table_columns(&conn, "docs").unwrap();
+        assert!(cols.iter().any(|c| c == "kind"));
+        assert!(cols.iter().any(|c| c == "meta_path"));
+        let index_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='docs_kind'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(index_exists, 1);
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+    }
+}
+
+fn base64url_8(input: &str) -> String {    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let bytes = input.as_bytes();
     let mut out = String::new();
     for chunk in bytes.chunks(3) {

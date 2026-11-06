@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS docs (
 );
 CREATE INDEX IF NOT EXISTS docs_status ON docs(status);
 CREATE INDEX IF NOT EXISTS docs_mtime ON docs(mtime);
-CREATE INDEX IF NOT EXISTS docs_kind ON docs(kind);
+-- docs_kind 在 migrate() 补完 kind 列之后再建，兼容 v3 旧库
 
 CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(
   doc_id UNINDEXED, rel_path, title_tokens, body_tokens,
