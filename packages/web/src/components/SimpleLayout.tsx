@@ -85,6 +85,7 @@ interface SimpleLayoutProps {
   onOpenDoc: (id: string) => void;
   onSwitchMode: () => void;
   onNewDoc: () => void;
+  onOpenClip: () => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
 }
@@ -94,6 +95,7 @@ export function SimpleLayout({
   onOpenDoc,
   onSwitchMode,
   onNewDoc,
+  onOpenClip,
   onOpenSettings,
   onOpenSearch,
 }: SimpleLayoutProps) {
@@ -355,18 +357,21 @@ export function SimpleLayout({
               <Icon name="plus" size={13} />
               新建
             </button>
-            <span className="simple-foot-stats">{formatWords(info?.stats.words ?? 0)}</span>
+            <button className="icon-btn" onClick={onOpenClip} title="剪藏网页" aria-label="剪藏网页">
+              <Icon name="clip" size={15} />
+            </button>
             <button
               className="icon-btn"
               onClick={onSwitchMode}
               title="切换到万卷（书架 + 三栏）"
               aria-label="切换到万卷"
             >
-              <Icon name="layout" size={15} />
+              <Icon name="portal" size={15} />
             </button>
             <button className="icon-btn" onClick={onOpenSettings} title="设置" aria-label="设置">
               <Icon name="settings" size={15} />
             </button>
+            <span className="simple-foot-stats">{formatWords(info?.stats.words ?? 0)}</span>
           </div>
         </div>
       </aside>
@@ -395,6 +400,9 @@ export function SimpleLayout({
         <button className="icon-btn rail-btn" onClick={onNewDoc} title="新建（Ctrl+N）" aria-label="新建">
           <Icon name="plus" size={16} />
         </button>
+        <button className="icon-btn rail-btn" onClick={onOpenClip} title="剪藏网页" aria-label="剪藏网页">
+          <Icon name="clip" size={15} />
+        </button>
         <span className="rail-spacer" />
         <button
           className="icon-btn rail-btn"
@@ -402,7 +410,7 @@ export function SimpleLayout({
           title="切换到万卷"
           aria-label="切换到万卷"
         >
-          <Icon name="layout" size={15} />
+          <Icon name="portal" size={15} />
         </button>
         <button className="icon-btn rail-btn" onClick={onOpenSettings} title="设置" aria-label="设置">
           <Icon name="settings" size={15} />
@@ -440,9 +448,15 @@ export function SimpleLayout({
                 ))}
               </div>
             )}
-            <button className="btn btn-ghost small" onClick={onSwitchMode}>
-              打开万卷
-            </button>
+            <div className="simple-empty-actions">
+              <button className="btn btn-ghost small" onClick={onOpenClip}>
+                <Icon name="clip" size={13} />
+                剪藏网页
+              </button>
+              <button className="btn btn-ghost small" onClick={onSwitchMode}>
+                打开万卷
+              </button>
+            </div>
           </div>
         )}
       </main>

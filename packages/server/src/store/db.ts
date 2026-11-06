@@ -591,6 +591,14 @@ export class IndexDB {
     return rows.map((r) => ({ id: r.id, relPath: r.rel_path, title: r.title, aliases: parseTags(r.aliases) }));
   }
 
+  /** 剪藏去重：所有带 source.url 的文档（通常很少，直接内存比较） */
+  docsWithSources(): { id: string; relPath: string; title: string; sourceUrl: string }[] {
+    const rows = this.db
+      .prepare("SELECT id, rel_path, title, source_url FROM docs WHERE source_url IS NOT NULL AND source_url <> ''")
+      .all() as { id: string; rel_path: string; title: string; source_url: string }[];
+    return rows.map((r) => ({ id: r.id, relPath: r.rel_path, title: r.title, sourceUrl: r.source_url }));
+  }
+
   /** 已索引但磁盘上已不存在的文件（增量删除用） */
   staleDocs(existingRelPaths: Set<string>): { id: string; relPath: string }[] {
     const rows = this.db.prepare('SELECT id, rel_path FROM docs').all() as { id: string; rel_path: string }[];

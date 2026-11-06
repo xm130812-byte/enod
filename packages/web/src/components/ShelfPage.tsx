@@ -15,6 +15,7 @@ type ViewMode = 'explorer' | 'grid' | 'list' | 'tags';
 interface ShelfPageProps {
   onOpenDoc: (id: string) => void;
   onNewDoc: () => void;
+  onOpenClip: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onSwitchMode: () => void;
@@ -74,7 +75,14 @@ function sortDocs(docs: DocSummary[], sort: SortKey): DocSummary[] {
   return list.sort((a, b) => b.mtime - a.mtime);
 }
 
-export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings, onSwitchMode }: ShelfPageProps) {
+export function ShelfPage({
+  onOpenDoc,
+  onNewDoc,
+  onOpenClip,
+  onOpenSearch,
+  onOpenSettings,
+  onSwitchMode,
+}: ShelfPageProps) {
   const { docs, tags, info, loading, error, refresh, refreshDocs, progress, config } = useLibrary();
   const { toast } = useToast();
   const density = config?.density ?? 'comfortable';
@@ -207,25 +215,30 @@ export function ShelfPage({ onOpenDoc, onNewDoc, onOpenSearch, onOpenSettings, o
           </div>
         </div>
 
-        <button className="search-trigger" onClick={onOpenSearch} title="全局搜索（Ctrl+K）">
-          <Icon name="search" size={17} />
-          <span>搜索标题、正文、批注…</span>
-          <kbd>Ctrl K</kbd>
-        </button>
-
+        {/* 常用操作统一靠左，顺序与一页侧栏底部一致：新建 → 剪藏 → 切换 → 设置 */}
         <div className="head-actions">
-          <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到一页（左侧文件树 + 中间文章）">
-            <Icon name="layout" size={14} />
-            一页
-          </button>
-          <button className="btn btn-primary" onClick={onNewDoc}>
+          <button className="btn btn-primary" onClick={onNewDoc} title="新建文档（Ctrl+N）">
             <Icon name="plus" size={16} />
             新建
+          </button>
+          <button className="btn btn-ghost small" onClick={onOpenClip} title="剪藏网页到 Inbox">
+            <Icon name="clip" size={14} />
+            剪藏
+          </button>
+          <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到一页（左侧文件树 + 中间文章）">
+            <Icon name="portal" size={14} className="flip-x" />
+            一页
           </button>
           <button className="icon-btn" onClick={onOpenSettings} title="设置">
             <Icon name="settings" size={18} />
           </button>
         </div>
+
+        <button className="search-trigger" onClick={onOpenSearch} title="全局搜索（Ctrl+K）">
+          <Icon name="search" size={17} />
+          <span>搜索标题、正文、批注…</span>
+          <kbd>Ctrl K</kbd>
+        </button>
       </header>
 
       <div className="shelf-toolbar">

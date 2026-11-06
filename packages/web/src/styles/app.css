@@ -296,6 +296,8 @@ a {
   display: flex;
   flex-direction: column;
   position: relative;
+  /* 切换视图时的轻微缩放会被裁掉，不产生滚动条 */
+  overflow: hidden;
 }
 
 .muted {
@@ -303,6 +305,10 @@ a {
 }
 .small {
   font-size: 12px;
+}
+/* 图标镜像：万卷里的「一页」按钮用反向的门，表示穿回去 */
+.flip-x {
+  transform: scaleX(-1);
 }
 .pad {
   padding: 24px;
@@ -553,10 +559,9 @@ kbd {
 }
 
 .shelf-head {
-  display: grid;
-  grid-template-columns: minmax(190px, auto) minmax(240px, 520px) auto;
-  gap: 20px;
+  display: flex;
   align-items: center;
+  gap: 16px;
   padding: 10px 24px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
@@ -609,6 +614,10 @@ kbd {
   color: var(--fg-3);
   font-size: 12.5px;
   min-width: 0;
+  /* 操作组整体靠左后，搜索框贴右，中间留白 */
+  margin-left: auto;
+  width: min(420px, 42vw);
+  flex: 0 1 auto;
 }
 .search-trigger span {
   flex: 1;
@@ -626,7 +635,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 6px;
-  justify-self: end;
+  flex: none;
 }
 
 .shelf-toolbar {
@@ -2817,9 +2826,8 @@ mark.find-hit.active {
   .toc {
     display: none;
   }
-  .shelf-head {
-    grid-template-columns: auto 1fr auto;
-    gap: 12px;
+  .search-trigger {
+    width: min(240px, 40vw);
   }
   .search-trigger span {
     display: none;

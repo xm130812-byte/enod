@@ -7,7 +7,8 @@ import { SearchOverlay } from './components/SearchOverlay.tsx';
 import { SettingsDialog } from './components/SettingsDialog.tsx';
 import { NewDocDialog } from './components/DocDialogs.tsx';
 import { SimpleLayout } from './components/SimpleLayout.tsx';
-import type { AppConfig, DocPayload } from './types.ts';
+import { ClipDialog } from './components/ClipDialog.tsx';
+import type { AppConfig, ClipResult, DocPayload } from './types.ts';
 import { api } from './api.ts';
 import { Icon } from './components/Icons.tsx';
 
@@ -71,6 +72,7 @@ function Shell() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
+  const [clipOpen, setClipOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [appMode, setAppMode] = useState<'simple' | 'complex'>(() => {
     try {
@@ -80,7 +82,11 @@ function Shell() {
     }
   });
 
+  // null = 首次加载（走视图自己的 view-in）；active = 正在切换；idle = 切换结束
+  const [swap, setSwap] = useState<'active' | 'idle' | null>(null);
+
   const switchMode = useCallback((mode: 'simple' | 'complex') => {
+    setSwap('active');
     setAppMode(mode);
     try {
       localStorage.setItem('mr.app.mode', mode);
@@ -88,6 +94,12 @@ function Shell() {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    if (swap !== 'active') return;
+    const timer = window.setTimeout(() => setSwap('idle'), 320);
+    return () => window.clearTimeout(timer);
+  }, [swap]);
 
   useTheme(config);
 
@@ -169,6 +181,14 @@ function Shell() {
     window.location.hash = '#/';
   }, []);
 
+  const handleClipped = useCallback(
+    (result: ClipResult) => {
+      void refresh();
+      openDoc(result.doc.id);
+    },
+    [openDoc, refresh],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
@@ -192,13 +212,14 @@ function Shell() {
   }, [error, info, loading, toast]);
 
   return (
-    <div className="app">
+    <div className="app" data-swap={swap ?? undefined}>
       {appMode === 'simple' ? (
         <SimpleLayout
           docId={route.view === 'doc' ? route.id : null}
           onOpenDoc={openDoc}
           onSwitchMode={() => switchMode('complex')}
           onNewDoc={() => setNewDocOpen(true)}
+          onOpenClip={() => setClipOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
         />
@@ -215,6 +236,7 @@ function Shell() {
         <ShelfPage
           onOpenDoc={openDoc}
           onNewDoc={() => setNewDocOpen(true)}
+          onOpenClip={() => setClipOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onSwitchMode={() => switchMode('simple')}
@@ -236,6 +258,12 @@ function Shell() {
 
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} onOpenDoc={openDoc} />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ClipDialog
+        open={clipOpen}
+        onClose={() => setClipOpen(false)}
+        onOpenDoc={openDoc}
+        onClipped={handleClipped}
+      />
       <NewDocDialog
         open={newDocOpen}
         dirs={info?.dirs ?? ['Inbox']}

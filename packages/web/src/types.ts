@@ -148,3 +148,45 @@ export interface ConflictDetail {
     body: string;
   };
 }
+
+export type ClipMode = 'ask' | 'skip' | 'new' | 'overwrite';
+
+export interface ClipDuplicate {
+  id: string;
+  title: string;
+  relPath: string;
+}
+
+export interface ClipResult {
+  doc: DocSummary;
+  title: string;
+  url: string;
+  site: string;
+  imageCount: number;
+  warnings: string[];
+  duplicate?: ClipDuplicate;
+  skipped?: boolean;
+  overwritten?: boolean;
+}
+
+export type ClipJobStatus =
+  | 'queued'
+  | 'fetching'
+  | 'extracting'
+  | 'duplicate'
+  | 'images'
+  | 'saving'
+  | 'done'
+  | 'error';
+
+export interface ClipJob {
+  jobId: string;
+  url: string;
+  status: ClipJobStatus;
+  progress: number;
+  message: string;
+  createdAt: number;
+  updatedAt: number;
+  result?: ClipResult;
+  error?: { code: string; message: string };
+}

@@ -1,6 +1,8 @@
 import type {
   Annotation,
   AppConfig,
+  ClipJob,
+  ClipMode,
   DocPayload,
   DocStatus,
   DocSummary,
@@ -135,6 +137,10 @@ export const api = {
   mentions: (id: string) => request<UnlinkedMention[]>(`/docs/${encodeURIComponent(id)}/mentions`),
   tags: () => request<{ tag: string; count: number }[]>('/tags'),
   preview: (target: string) => request<{ id: string; title: string; excerpt: string } | { notFound: true }>(`/preview?target=${encodeURIComponent(target)}`),
+
+  clip: (input: { url: string; mode?: ClipMode }) =>
+    request<{ jobId: string; status: string }>('/clip', { method: 'POST', body: input }),
+  clipJob: (jobId: string) => request<ClipJob>(`/clip/${encodeURIComponent(jobId)}`),
 
   config: () => request<AppConfig>('/config'),
   updateConfig: (patch: Partial<AppConfig>) => request<AppConfig>('/config', { method: 'PATCH', body: patch }),

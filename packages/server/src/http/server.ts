@@ -6,9 +6,10 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import type { ConfigStore } from '../core/config.ts';
+import { ulid } from '../core/ulid.ts';
 import { HttpError, isHttpError } from './errors.ts';
 import type { EventHub } from './sse.ts';
-import type { LibraryService } from '../library/service.ts';
+import type { ClipMode, ClipProgress, ClipResult, LibraryService } from '../library/service.ts';
 
 export interface ServerContext {
   service: LibraryService;
@@ -20,6 +21,20 @@ export interface ServerContext {
   startedAt: number;
   webDist: string | null;
   dev: boolean;
+}
+
+type ClipJobStatus = ClipProgress['phase'] | 'queued' | 'done' | 'error';
+
+interface ClipJob {
+  jobId: string;
+  url: string;
+  status: ClipJobStatus;
+  progress: number;
+  message: string;
+  createdAt: number;
+  updatedAt: number;
+  result?: ClipResult;
+  error?: { code: string; message: string };
 }
 
 interface RouteCtx {
@@ -151,6 +166,30 @@ function parseCookies(): void {
 }
 
 export function createServer(ctx: ServerContext): http.Server {
+  const clipJobs = new Map<string, ClipJob>();
+
+  const pruneClipJobs = (): void => {
+    const cutoff = Date.now() - 30 * 60_000;
+    for (const [id, job] of clipJobs) {
+      if (job.updatedAt < cutoff) clipJobs.delete(id);
+    }
+    while (clipJobs.size > 50) {
+      const oldest = clipJobs.keys().next().value;
+      if (!oldest) break;
+      clipJobs.delete(oldest);
+    }
+  };
+
+  const broadcastClip = (job: ClipJob): void => {
+    ctx.hub.broadcast('clip-progress', {
+      jobId: job.jobId,
+      status: job.status,
+      progress: job.progress,
+      message: job.message,
+      at: Date.now(),
+    });
+  };
+
   const routes: Route[] = [
     route('GET', '/api/v1/health', () => ({
       ok: true,
@@ -342,8 +381,62 @@ export function createServer(ctx: ServerContext): http.Server {
       return '__handled__';
     }),
 
-    route('POST', '/api/v1/clip', () => {
-      throw new HttpError(501, 'not-implemented', '剪藏（P1）尚未实现');
+    route('POST', '/api/v1/clip', ({ body }) => {
+      const input = (body ?? {}) as { url?: unknown; mode?: unknown };
+      const url = typeof input.url === 'string' ? input.url.trim() : '';
+      if (!url) throw new HttpError(400, 'bad-request', '需要 url');
+      if (url.length > 4096) throw new HttpError(400, 'bad-request', 'URL 过长');
+      const mode: ClipMode =
+        input.mode === 'new' || input.mode === 'overwrite' || input.mode === 'skip' ? input.mode : 'ask';
+
+      pruneClipJobs();
+      const jobId = ulid();
+      const now = Date.now();
+      const job: ClipJob = {
+        jobId,
+        url,
+        status: 'queued',
+        progress: 0,
+        message: '已加入队列',
+        createdAt: now,
+        updatedAt: now,
+      };
+      clipJobs.set(jobId, job);
+
+      const update = (status: ClipJobStatus, progress: number, message: string): void => {
+        job.status = status;
+        job.progress = progress;
+        job.message = message;
+        job.updatedAt = Date.now();
+        broadcastClip(job);
+      };
+
+      // 仅供本地端到端测试：允许抓取 127.0.0.1 上的测试页面。
+      const allowPrivate = process.env.READER_CLIP_ALLOW_PRIVATE === '1';
+      void ctx.service
+        .clip({ url, mode, allowPrivate }, (progress: ClipProgress) => {
+          update(progress.phase, progress.progress, progress.message);
+        })
+        .then((result) => {
+          job.result = result;
+          const duplicated = Boolean(result.duplicate && !result.overwritten);
+          update(duplicated ? 'duplicate' : 'done', 1, duplicated ? '发现重复文档' : '剪藏完成');
+        })
+        .catch((err: unknown) => {
+          const code = isHttpError(err) ? err.code : 'clip-failed';
+          const message = err instanceof Error ? err.message : String(err);
+          job.error = { code, message };
+          update('error', 1, message);
+        });
+
+      return { jobId, status: job.status };
+    }),
+
+    route('GET', '/api/v1/clip/:jobId', ({ params }) => {
+      pruneClipJobs();
+      const job = clipJobs.get(params.jobId!);
+      if (!job) throw new HttpError(404, 'not-found', '剪藏任务不存在或已过期');
+      return job;
     }),
   ];
 

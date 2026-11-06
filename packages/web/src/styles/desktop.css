@@ -347,6 +347,11 @@
 .simple-recent-item:hover {
   background: var(--bg-hover);
 }
+.simple-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 /* ------------------------------------------------------------ 万卷：书架 */
 
@@ -358,7 +363,6 @@
   height: 54px;
   padding: 0 18px;
   gap: 16px;
-  grid-template-columns: minmax(180px, auto) minmax(240px, 460px) auto;
   border-bottom: 1px solid var(--line-soft);
   background: var(--bg);
 }
@@ -710,6 +714,14 @@
   gap: 7px;
   border-bottom: 1px solid var(--line-soft);
   background: color-mix(in oklab, var(--bg) 92%, var(--bg-side));
+}
+/* 顶栏操作组靠左：DOM 仍是「返回 → 标题 → 操作」，视觉上是「返回 → 操作 → 标题」。
+   标题不参与 Tab 顺序，所以视觉与键盘顺序一致。 */
+.reader-actions {
+  order: 1;
+}
+.reader-title {
+  order: 2;
 }
 .reader-title h1 {
   font-family: var(--font-display);
@@ -1349,7 +1361,201 @@
   border-radius: 5px;
 }
 
+/* ------------------------------------------------------------ 剪藏 */
+
+.clip-hint {
+  margin: 2px 0 0;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+.clip-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+.clip-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.clip-progress-head .spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 1.5px;
+  flex: none;
+}
+.clip-progress-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.clip-progress-head strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.clip-progress-head span {
+  font-size: 11px;
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clip-progress-head em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.clip-bar {
+  height: 4px;
+  margin-top: 10px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--fg) 8%, transparent);
+  overflow: hidden;
+}
+.clip-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 180ms var(--ease);
+}
+.clip-url {
+  margin: 8px 0 0;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clip-duplicate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.clip-dup-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+.clip-dup-card > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--fg-3);
+}
+.clip-dup-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.clip-dup-card strong {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+.clip-dup-card span {
+  font-size: 13px;
+  font-weight: 600;
+}
+.clip-dup-card em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clip-warn {
+  margin: 0;
+  padding: 9px 11px;
+  border-left: 2px solid var(--danger);
+  border-radius: 0 5px 5px 0;
+  background: color-mix(in oklab, var(--danger) 8%, transparent);
+  color: var(--fg-2);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+.clip-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--danger) 32%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--danger) 7%, transparent);
+}
+.clip-error > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--danger);
+}
+.clip-error > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.clip-error strong {
+  font-size: 12px;
+}
+.clip-error p {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.clip-error span {
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.clip-running-note {
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
 /* ------------------------------------------------------------ 动效 */
+
+/* 一页 ⇄ 万卷：新视图轻微「推近」再落定，避免硬切；从 1.012 起步所以不会露出底色缝隙 */
+.app[data-swap='active'] > .simple,
+.app[data-swap='active'] > .shelf,
+.app[data-swap='active'] > .reader {
+  animation: view-swap 260ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* 切换结束后关掉子视图自带的 view-in，免得属性一撤又重新播一次 */
+.app[data-swap='idle'] > .simple,
+.app[data-swap='idle'] > .shelf,
+.app[data-swap='idle'] > .reader {
+  animation: none;
+}
+@keyframes view-swap {
+  from {
+    opacity: 0.6;
+    transform: scale(1.035);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
 @keyframes view-in {
   from {

@@ -4,7 +4,7 @@
 
 本地优先：文件就是数据库。元数据、批注、链接全部写在 Markdown 的 frontmatter 与正文里，同步交给坚果云 / WebDAV / Git 即可。
 
-> 当前状态：**初版可运行**（M1 骨架 + P0 写作 / 批注 / 双链 / 搜索）。剪藏（M5）未实现；打包已跑通 SEA 便携版，Tauri 托盘/安装包受工具链阻塞，见 [docs/PACKAGING.md](docs/PACKAGING.md)。
+> 当前状态：**初版可运行**（M1 骨架 + P0 写作 / 批注 / 双链 / 搜索 + P1 剪藏）。剪藏已实现，真实站点成功率待验收；打包已跑通 SEA 便携版，Tauri 托盘/安装包受工具链阻塞，见 [docs/PACKAGING.md](docs/PACKAGING.md)。
 > 需求基线：[PRD-v3](../PRD-v3.md)。
 
 ![一页](docs/screenshots/simple.png)
@@ -25,7 +25,7 @@
 | 搜索 | ✅ | 中文分词 + FTS5（bigram 兜底），200ms 去抖，标题 / 正文 / 标签 / 批注备注 |
 | 文件操作 | ✅ | 新建、重命名、移动（同步更新 `[[链接]]`）、删除到 `.trash/`、占位图片上传、拖入 `.md` 导入 |
 | 实时 | ✅ | SSE：索引进度、外部改动、删除、配置变更；前端静默刷新 |
-| 剪藏 | ⛔ | `POST /clip` 返回 501（P1） |
+| 剪藏 | ✅ | 粘贴 URL → Readability 提取 → Markdown → 图片落到 `assets/` → 写入 `Inbox/`；canonical 去重（覆盖 / 新建 / 跳过）；异步任务 + 进度；真实站点成功率待验收 |
 | 安装包 | ⛔ | SEA sidecar 已验证（`dist/sea/md-reader.exe`）；Tauri 壳需要 Rust + MSVC，见 [docs/PACKAGING.md](docs/PACKAGING.md) |
 
 ### 界面
@@ -68,13 +68,13 @@
 | **一页（默认）** | 左：文件夹 / 目录两个 tab + 文章 | 日常阅读：打开即读，目录与文件树在左侧切换，没有状态筛选干扰 |
 | **万卷** | 书架（文件夹 / 卡片 / 列表 / 标签）+ 三栏阅读 + 状态导航 | 整理、批量、查看批注与反链 |
 
-- 切换入口：一页左下布局图标（悬停提示“切换到万卷”）；万卷右上「一页」；阅读器「更多 → 切换到一页」。
+- 切换入口：一页左下布局图标（悬停提示“切换到万卷”）；万卷顶栏左侧「一页」；阅读器「更多 → 切换到一页」。
 - 选择写入 `localStorage · mr.app.mode`，刷新后保持。
 - 一页左侧顶部有「文件夹 / 目录」两个 tab：文件夹是文件树，目录是当前文章的标题大纲；**与万卷共用同一套目录条目样式**（滚动高亮、点击跳转）。tab 选择也记住（`mr.simple.side`）。
 
 ### 文内查找与全局搜索
 
-- 阅读页右上角**放大镜 → 全局搜索（`Ctrl+K`）**：跨书库找标题、正文、标签、批注备注。
+- 阅读页顶栏左侧**放大镜 → 全局搜索（`Ctrl+K`）**：跨书库找标题、正文、标签、批注备注。
 - `Ctrl/Cmd+F` 是**文内查找**：只在当前文章里找。
 - 文内查找：输入即高亮全部命中，当前项用强调色；`Enter` / `Shift+Enter` 上下跳转，`Esc` 关闭。
 
@@ -87,7 +87,7 @@
 
 ### 阅读布局
 
-阅读页右上角的布局按钮可切换文档 / 专注，沉浸模式在“更多”菜单里；布局选择会写入配置，进入/退出文章不会丢：
+阅读页顶栏左侧的布局按钮可切换文档 / 专注，沉浸模式在“更多”菜单里；布局选择会写入配置，进入/退出文章不会丢：
 
 | 布局 | 说明 |
 |---|---|
@@ -170,7 +170,7 @@ SEA 产物不依赖系统 Node，已实测健康检查、静态页面、索引�
 ### 测试
 
 ```powershell
-pnpm test           # 46 个单元测试（编码保真 / frontmatter 局部改写 / 分词 / 渲染 / 锚点重定位 / 索引）
+pnpm test           # 51 个单元测试（编码保真 / frontmatter 局部改写 / 分词 / 渲染 / 锚点重定位 / 索引 / 剪藏）
 pnpm typecheck
 ```
 
@@ -286,7 +286,8 @@ Chrome (web UI)  ──HTTP / SSE──▶  Node 守护进程 127.0.0.1:<随机�
 | GET | `/search` · `/tags` · `/preview` | 搜索 / 标签 / 悬浮预览 |
 | POST | `/assets` | 图片二进制上传（`image/*`，`docId` 查询参数） |
 | GET | `/files?path=` | 书库内图片 |
-| POST | `/clip` | 剪藏（未实现，501） |
+| POST | `/clip` | 剪藏入队，返回 `{jobId}` |
+| GET | `/clip/:jobId` | 剪藏进度与结果（同时有 SSE `clip-progress`） |
 | GET | `/events` | SSE：index-progress / doc-changed / doc-removed / links-changed |
 
 **安全**（PRD §4.3）：仅绑定 `127.0.0.1`；变更请求必须 `X-Reader-Client: 1` + JSON（图片除外），跨源 `Origin` 一律 403；CSP 禁 inline script（Shiki 的 WASM 额外放行 `'wasm-unsafe-eval'`）。
@@ -322,7 +323,7 @@ Chrome (web UI)  ──HTTP / SSE──▶  Node 守护进程 127.0.0.1:<随机�
 
 | 项 | 现状 | 计划 |
 |---|---|---|
-| 剪藏 | API 501，界面无入口 | M5：Readability + turndown + 图片本地化 |
+| 剪藏 | 已实现（本地假页面 + 5 个单元测试）；20 个主流站点的提取成功率未验收 | 实测公众号 / 知乎 / Medium 后调提取规则 |
 | 打包 | SEA 便携版已验证（26.7 MB）；无托盘 / 安装包 | Tauri 壳 + NSIS 安装包，需要 Rust + MSVC，见 [docs/PACKAGING.md](docs/PACKAGING.md) |
 | 逐行合并 | 冲突对话框里的**手动合并面板**（磁盘版 / 我的版 / 可编辑结果），非自动 diff3 | 后续接 `@codemirror/merge` 或自研 hunk |
 | 文内查找 | 用 Chrome 原生 `Ctrl+F` | 自定义高亮跳转 |
@@ -336,7 +337,7 @@ Chrome (web UI)  ──HTTP / SSE──▶  Node 守护进程 127.0.0.1:<随机�
 ## 下一步
 
 1. **M1.5 打包验证**：Tauri 壳 + SEA sidecar + 托盘，尽早暴露安装风险；
-2. 剪藏（M5）；
+2. 剪藏真实站点验收（公众号 / 知乎 / Medium）；
 3. 批量操作、导出批注、拖入文件等写作/书架细节；
 4. 3000 篇性能实测与索引增量优化。
 

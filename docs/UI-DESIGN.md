@@ -146,6 +146,7 @@ UI:   "Segoe UI Variable Text", "Segoe UI", -apple-system, "PingFang SC", "Micro
 | 场景 | 动效 | 时长 |
 |---|---|---|
 | 视图进入 | 透明度 + 3px 上移 | 260ms |
+| 一页 ⇄ 万卷 | opacity 0.6→1 + scale 1.035→1（`--ease-out` 换成更匀的 `cubic-bezier(.4,0,.2,1)`） | 260ms |
 | 正文换文档 | 透明度 + 5px 上移 | 300ms |
 | 侧栏 / 右侧面板 | width + opacity | 260ms |
 | 文件夹展开 | grid rows + opacity + chevron 90° | 180ms |

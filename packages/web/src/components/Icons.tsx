@@ -19,11 +19,13 @@ export type IconName =
   | 'book'
   | 'sidebar'
   | 'layout'
+  | 'portal'
   | 'copy'
   | 'external'
   | 'note'
   | 'more'
   | 'inbox'
+  | 'clip'
   | 'refresh'
   | 'chevron-down'
   | 'chevron-right'
@@ -116,6 +118,14 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M9 4v16" />
     </>
   ),
+  /** 一页 ⇄ 万卷：一道门 + 穿门而出的箭头 */
+  portal: (
+    <>
+      <path d="M4.5 21V9a6 6 0 0112 0v12" />
+      <path d="M7.6 15.4h14.4" />
+      <path d="M19 12.2l3.4 3.2-3.4 3.2" />
+    </>
+  ),
   copy: (
     <>
       <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -147,6 +157,13 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <path d="M4 4h16v16H4z" />
       <path d="M4 13h4l2 3h4l2-3h4" />
+    </>
+  ),
+  clip: (
+    <>
+      <path d="M5 3h9l5 5v13H5z" />
+      <path d="M14 3v5h5" />
+      <path d="M12 11v6M9.5 14.5L12 17l2.5-2.5" />
     </>
   ),
   refresh: (

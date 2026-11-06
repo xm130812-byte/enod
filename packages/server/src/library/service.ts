@@ -29,6 +29,9 @@ import { LibraryIndexer } from './indexer.ts';
 import { parseDocBuffer } from './parse.ts';
 import type { ParsedDocFile } from './parse.ts';
 import { LibraryWatcher } from './watcher.ts';
+import { downloadImage, extractArticle, fetchPage } from './clip/extract.ts';
+import { clipKey, normalizeClipUrl } from './clip/url.ts';
+import type { ExtractedArticle } from './clip/extract.ts';
 
 export interface DocDTO {
   id: string;
@@ -106,6 +109,41 @@ export interface SearchResult {
   snippet: string;
   matchStart: number;
   matchEnd: number;
+}
+
+export type ClipMode = 'ask' | 'skip' | 'new' | 'overwrite';
+
+export interface ClipInput {
+  url: string;
+  mode?: ClipMode;
+  /** 仅测试/本地开发使用：允许抓取 127.0.0.1 等内网地址 */
+  allowPrivate?: boolean;
+}
+
+export interface ClipDuplicate {
+  id: string;
+  title: string;
+  relPath: string;
+}
+
+export interface ClipResult {
+  doc: DocDTO;
+  title: string;
+  url: string;
+  site: string;
+  imageCount: number;
+  warnings: string[];
+  duplicate?: ClipDuplicate;
+  skipped?: boolean;
+  overwritten?: boolean;
+}
+
+export type ClipPhase = 'fetching' | 'extracting' | 'duplicate' | 'images' | 'saving';
+
+export interface ClipProgress {
+  phase: ClipPhase;
+  progress: number;
+  message: string;
 }
 
 export interface LibraryStats {
@@ -769,6 +807,178 @@ export class LibraryService {
     return { trashedTo: relativePosix(this.root, target) };
   }
 
+  /* -------------------------------------------------------------- 剪藏 */
+
+  /**
+   * 网页剪藏（M5）：抓取 → Readability → Markdown → 图片本地化 → Inbox。
+   * 返回的 doc 已建索引；duplicate 表示命中同一 canonical URL 的已有文档。
+   */
+  async clip(input: ClipInput, onProgress?: (progress: ClipProgress) => void): Promise<ClipResult> {
+    if (!this.root) throw new HttpError(409, 'no-library', '还没有挂载书库');
+    const mode = input.mode ?? 'ask';
+    if (!['ask', 'skip', 'new', 'overwrite'].includes(mode)) throw badRequest('未知的剪藏模式');
+    const allowPrivate = input.allowPrivate === true;
+    const normalized = normalizeClipUrl(input.url, allowPrivate);
+    if (!normalized) throw badRequest('请输入有效的网页地址（http/https，不支持本机/内网）');
+
+    const report = (phase: ClipPhase, progress: number, message: string): void => {
+      onProgress?.({ phase, progress: Math.max(0, Math.min(1, progress)), message });
+    };
+
+    report('fetching', 0.04, '正在抓取网页…');
+    const page = await fetchPage(normalized.href, { allowPrivate });
+    report('extracting', 0.24, '正在提取正文…');
+    const article = extractArticle(page.html, page.finalUrl);
+    const canonical = clipKey(article.canonicalUrl, true) || page.finalUrl;
+    const duplicate = this.findClipDuplicate(canonical);
+
+    if (duplicate && mode !== 'new' && mode !== 'overwrite') {
+      report('duplicate', 1, `已经剪藏过「${duplicate.title}」`);
+      return {
+        doc: toDTO(this.db.getDoc(duplicate.id)!),
+        title: duplicate.title,
+        url: canonical,
+        site: article.site,
+        imageCount: 0,
+        warnings: article.warnings,
+        duplicate,
+        skipped: mode === 'skip',
+      };
+    }
+
+    const warnings = [...article.warnings];
+
+    if (duplicate && mode === 'overwrite') {
+      const localized = await this.localizeClipImages(article, page.finalUrl, duplicate.id, allowPrivate, report);
+      warnings.push(...localized.warnings);
+      if (duplicate.title !== article.title) {
+        warnings.push('已保留原文档标题，避免破坏已有的 [[链接]]。');
+      }
+      report('saving', 0.92, '正在覆盖正文…');
+      await this.saveDoc(duplicate.id, { body: localized.markdown });
+      this.hub.broadcast('doc-changed', { id: duplicate.id, origin: 'clip-overwrite' });
+      return {
+        doc: toDTO(this.requireDoc(duplicate.id)),
+        title: duplicate.title,
+        url: canonical,
+        site: article.site,
+        imageCount: localized.count,
+        warnings,
+        duplicate,
+        overwritten: true,
+      };
+    }
+
+    const id = ulid();
+    const localized = await this.localizeClipImages(article, page.finalUrl, id, allowPrivate, report);
+    warnings.push(...localized.warnings);
+
+    report('saving', 0.93, '正在写入收件箱…');
+    const dirAbs = path.join(this.root, 'Inbox');
+    await fsp.mkdir(dirAbs, { recursive: true });
+    const baseName = sanitizeSegment(article.title) || '未命名剪藏';
+    const file = uniquePath(dirAbs, baseName);
+    const site = (article.site || safeHostname(page.finalUrl)).slice(0, 80);
+    const frontmatter = buildFrontmatter({
+      title: article.title,
+      id,
+      created: new Date().toISOString(),
+      source: {
+        url: canonical,
+        site,
+        author: article.author.slice(0, 120),
+        published: article.published.slice(0, 60),
+        clipped_at: new Date().toISOString(),
+      },
+    });
+    const text = frontmatter + localized.markdown;
+    await atomicWriteFile(file, Buffer.from(text, 'utf8'), { retries: 1 });
+
+    if (this.indexer) {
+      await this.indexer.indexFile(file);
+      this.indexer.resolveLinks();
+    }
+
+    const relPath = relativePosix(this.root, file);
+    this.hub.broadcast('doc-changed', { id, relPath, created: true, origin: 'clip' });
+    report('saving', 1, '已保存到收件箱');
+    return {
+      doc: toDTO(this.requireDoc(id)),
+      title: article.title,
+      url: canonical,
+      site,
+      imageCount: localized.count,
+      warnings,
+    };
+  }
+
+  private findClipDuplicate(url: string): ClipDuplicate | null {
+    if (!url) return null;
+    const key = clipKey(url, true);
+    for (const row of this.db.docsWithSources()) {
+      if (clipKey(row.sourceUrl, true) === key) {
+        return { id: row.id, title: row.title, relPath: row.relPath };
+      }
+    }
+    return null;
+  }
+
+  private async localizeClipImages(
+    article: ExtractedArticle,
+    pageUrl: string,
+    docId: string,
+    allowPrivate: boolean,
+    report: (phase: ClipPhase, progress: number, message: string) => void,
+  ): Promise<{ markdown: string; count: number; warnings: string[] }> {
+    const images = article.images;
+    if (images.length === 0) return { markdown: article.markdown, count: 0, warnings: [] };
+
+    const warnings: string[] = [];
+    const replacements = new Map<number, string>();
+    const maxImages = 30;
+    const dir = path.join(this.root!, 'assets', docId);
+    await fsp.mkdir(dir, { recursive: true });
+
+    let done = 0;
+    let cursor = 0;
+    let saved = 0;
+    const total = Math.min(images.length, maxImages);
+    if (images.length > maxImages) {
+      warnings.push(`图片超过 ${maxImages} 张，其余保留远程地址。`);
+    }
+    report('images', 0.3, `正在保存图片 0/${total}`);
+    for (const image of images.slice(maxImages)) replacements.set(image.index, image.url);
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const index = cursor++;
+        const image = images[index];
+        if (!image || index >= maxImages) return;
+        try {
+          const download = await downloadImage(image.url, pageUrl, { allowPrivate });
+          const name = `${hashBuffer(download.data).slice(0, 16)}${download.ext}`;
+          const abs = path.join(dir, name);
+          if (!fs.existsSync(abs)) await atomicWriteFile(abs, download.data, { retries: 1 });
+          replacements.set(image.index, `assets/${docId}/${name}`);
+          saved++;
+        } catch (err) {
+          replacements.set(image.index, image.url);
+          warnings.push(`图片未能本地化：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+          done++;
+          report('images', 0.3 + (done / Math.max(1, total)) * 0.58, `正在保存图片 ${done}/${total}`);
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(4, total) }, () => worker()));
+    const markdown = article.markdown.replace(/mr-image:\/\/(\d+)/g, (match, raw: string) => {
+      const index = Number(raw);
+      return replacements.get(index) ?? match;
+    });
+    return { markdown, count: saved, warnings };
+  }
+
   /* -------------------------------------------------------------- 批注 */
 
   async addAnnotation(
@@ -998,6 +1208,14 @@ function pickImageExt(filename: string, mime: string): string | null {
   if (byMime[mime]) return byMime[mime];
   const ext = path.extname(filename).toLowerCase();
   return IMAGE_TYPES[ext] ? ext : null;
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
 }
 
 function escapeRegExp(input: string): string {

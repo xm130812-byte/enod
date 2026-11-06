@@ -907,7 +907,7 @@ export function ReaderPage({
                       onSwitchMode();
                     }}
                   >
-                    <Icon name="layout" size={15} /> 切换到一页
+                    <Icon name="portal" size={15} className="flip-x" /> 切换到一页
                   </button>
                 )}
                 <span className="menu-sep" />
