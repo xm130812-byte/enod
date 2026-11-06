@@ -15,10 +15,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const out = path.join(root, 'dist', 'sea');
+// OUT_NAME 可指定子目录：常规 22MB 包放 dist/sea，给受管机器准备的未压缩包放 dist/portable
+const out = path.join(root, 'dist', process.env.OUT_NAME || 'sea');
 const nodeExe = process.execPath;
 const postjectCli = path.join(root, 'node_modules', 'postject', 'dist', 'cli.js');
 const fuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
+const rebrand = process.env.REBRAND === '1';
 
 function log(message) {
   console.log(`[sea] ${message}`);
@@ -56,6 +58,7 @@ async function main() {
     target: 'node24',
     outfile: path.join(out, 'server.cjs'),
     sourcemap: false,
+    minify: true,
     legalComments: 'none',
     logLevel: 'warning',
     banner: { js: '/* md-reader sidecar — bundled by esbuild */' },
@@ -101,7 +104,25 @@ async function main() {
 
   const rawSize = (await fsp.stat(exe)).size;
   let finalSize = rawSize;
-  const upx = findUpx();
+
+  if (rebrand) {
+    // 受管环境用：把 PE 里的 Node.js 版本信息与图标换成自己的。
+    // 重写资源段后 UPX 无法再压缩，所以这条路径固定输出未压缩 exe。
+    log('改写 PE 版本信息与图标（REBRAND=1）');
+    execFileSync(
+      nodeExe,
+      [
+        path.join(root, 'scripts', 'rebrand-exe.mjs'),
+        exe,
+        exe,
+        path.join(root, 'scripts', 'brand', 'md-reader.ico'),
+      ],
+      { cwd: root, stdio: 'inherit' },
+    );
+    log('已跳过 UPX（改写资源后无法再压缩）');
+  }
+
+  const upx = rebrand ? null : findUpx();
   if (upx) {
     log('UPX 压缩 exe（LZMA，约 90MB → 23MB）');
     try {
@@ -110,7 +131,7 @@ async function main() {
     } catch (error) {
       log(`UPX 压缩失败，保留未压缩 exe：${error.message}`);
     }
-  } else {
+  } else if (!rebrand) {
     log('未找到 UPX，跳过压缩（pnpm upx:fetch 可下载；NO_UPX=1 可显式跳过）');
   }
 
@@ -129,7 +150,7 @@ async function main() {
   log(`  web：${(webSize / 1024 / 1024).toFixed(1)} MB`);
   log(`  合计：${((finalSize + webSize) / 1024 / 1024).toFixed(1)} MB`);
   log(`前端：${path.join(out, 'web')}`);
-  log('试运行：dist\\sea\\md-reader.exe --no-open --port 0 --data-dir <临时目录>');
+  log(`试运行：${path.relative(root, exe)} --no-open --port 0 --data-dir <临时目录>`);
 }
 
 main().catch((err) => {

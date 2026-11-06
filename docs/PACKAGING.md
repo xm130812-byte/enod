@@ -153,3 +153,39 @@ dist/sea/
 没有托盘、没有安装包、没有开机自启；但「双击 → 打开 Chrome → 书架」这条主链路已经能跑。
 
 下一步只差 Tauri 壳把「托盘 + 安装包 + 自启」补齐。
+
+---
+
+## 6. 两套产物与体积取舍（2026-11）
+
+| 产物 | 命令 | 大小 | 适用 |
+|---|---|---|---|
+| `dist/sea/` | `pnpm package` | **25.4 MB** | 常规使用：exe 22.7 MB（UPX LZMA）+ web 2.7 MB |
+| `dist/portable/` | `REBRAND=1 OUT_NAME=portable pnpm package` | **93.8 MB** | 受管机器：改过 PE 元数据、不带壳 |
+
+### 6.1 体积是怎么再降 1.3 MB 的
+
+| 优化 | 省下 | 做法 |
+|---|---|---|
+| Shiki 换 JS 正则引擎 | ~556 KB | `createJavaScriptRegexEngine()` 取代 `createOnigurumaEngine(getWasm)`，不再内嵌 oniguruma wasm |
+| 语法包 19 → 14 种 | ~245 KB | 去掉 rust / go / java / c / csharp，需要时在 `highlight-shiki.ts` 补一行 import |
+| KaTeX 只留 woff2 | ~800 KB | `vite.config.ts` 里 `woff2OnlyFonts()` 插件：先改 CSS 再按引用删文件 |
+| 服务端 bundle minify | — | 抵消了新增 mammoth 的体积 |
+
+### 6.2 为什么要一套 `REBRAND` 产物
+
+Node SEA 是「复制 node.exe + 注入 blob」，所以文件的 PE 版本信息原样继承了 Node：
+
+```
+ProductName = Node.js · OriginalFilename = node.exe
+FileDescription = Node.js JavaScript Runtime
+```
+
+SEA 出来的 exe 还叠加了两个特征：**UPX 加壳**、**无数字签名**。企业终端管控（如奇安信）按软件名判断时，会直接命中「禁止安装 Node」。`REBRAND=1` 会：
+
+1. 用 `resedit` 重写所有语言的版本字符串（公司名/产品名/描述/原始文件名）
+2. 替换图标（`scripts/brand/md-reader.ico`）
+3. 跳过 UPX —— 改写资源段后 UPX 会报 `section size problem`，压缩不回去
+
+注意：这只改「文件自称是谁」，不是让程序不再使用 Node。如果管控策略是白名单/执行管控，仍然要走报备；如果想彻底摆脱 Node，只能重写后端（见 README 的下一步）。
+
