@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { FSWatcher } from 'node:fs';
 import { relativePosix, shouldSkipDir, shouldSkipFile } from '../core/paths.ts';
+import { kindOf } from './adapt.ts';
 import type { LibraryIndexer } from './indexer.ts';
 
 export interface WatchChange {
@@ -111,7 +112,7 @@ export class LibraryWatcher {
     try {
       for (const rel of batch) {
         if (!rel || this.isIgnored(rel)) continue;
-        if (!/\.md$/i.test(rel)) {
+        if (!kindOf(rel)) {
           // 目录重命名/新增目录：直接全量重扫（低频、可靠）
           if (!path.extname(rel)) {
             this.opts.onFullRescan?.('dir-change');

@@ -480,7 +480,8 @@ function makeTurndown(): TurndownService {
 
 const turndown = makeTurndown();
 
-function htmlToMarkdown(html: string): string {
+/** html 片段 → markdown（docx 等本地文档复用同一套 turndown 规则） */
+export function htmlToMarkdown(html: string): string {
   return turndown.turndown(html);
 }
 

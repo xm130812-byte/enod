@@ -3,7 +3,8 @@ import path from 'node:path';
 import { relativePosix, shouldSkipDir, shouldSkipFile } from '../core/paths.ts';
 import { ulid } from '../core/ulid.ts';
 import type { IndexDB } from '../store/db.ts';
-import { parseDocBuffer } from './parse.ts';
+import { convertToMarkdown, derivedDocId, kindOf, stripDocExt } from './adapt.ts';
+import { parseDocBuffer, parseDerivedDoc } from './parse.ts';
 
 export interface IndexProgress {
   phase: 'idle' | 'walk' | 'index' | 'links' | 'done';
@@ -40,7 +41,7 @@ export class LibraryIndexer {
     return this.scanning;
   }
 
-  /** 递归列出所有 .md 绝对路径 */
+  /** 递归列出所有可索引的文档绝对路径（.md 与适配格式，见 adapt.ts） */
   async walk(): Promise<string[]> {
     const out: string[] = [];
     const visit = async (dir: string): Promise<void> => {
@@ -59,7 +60,7 @@ export class LibraryIndexer {
         }
         if (!entry.isFile()) continue;
         if (shouldSkipFile(entry.name)) continue;
-        if (!/\.md$/i.test(entry.name)) continue;
+        if (!kindOf(entry.name)) continue;
         out.push(path.join(dir, entry.name));
       }
     };
@@ -117,7 +118,8 @@ export class LibraryIndexer {
 
   async indexFile(absPath: string): Promise<IndexFileStatus> {
     const rel = relativePosix(this.root, absPath);
-    if (!/\.md$/i.test(rel)) return 'ignored';
+    const kind = kindOf(rel);
+    if (!kind) return 'ignored';
     let stat: import('node:fs').Stats;
     try {
       stat = await fs.stat(absPath);
@@ -131,8 +133,12 @@ export class LibraryIndexer {
     const buffer = await fs.readFile(absPath);
     const previous = this.db.getDocByPath(rel);
 
-    const parsed = parseDocBuffer(rel, buffer, mtime, stat.size);
-    const id = parsed.readerId ?? previous?.id ?? ulid();
+    const parsed =
+      kind === 'md'
+        ? parseDocBuffer(rel, buffer, mtime, stat.size)
+        : parseDerivedDoc(rel, buffer, mtime, stat.size, await convertToMarkdown(buffer, absPath, rel, kind, this.root));
+    // md 的身份在 frontmatter 里；非 md 没有地方存，按路径派生，重建索引也不变
+    const id = parsed.readerId ?? previous?.id ?? (kind === 'md' ? ulid() : derivedDocId(rel));
     parsed.record.id = id;
     parsed.record.indexedAt = Date.now();
 
@@ -172,10 +178,10 @@ export class LibraryIndexer {
     };
     for (const doc of docs) put(doc.title, doc.id);
     for (const doc of docs) for (const alias of doc.aliases) put(alias, doc.id);
-    for (const doc of docs) put(path.posix.basename(doc.relPath).replace(/\.md$/i, ''), doc.id);
+    for (const doc of docs) put(stripDocExt(path.posix.basename(doc.relPath)), doc.id);
     for (const doc of docs) {
       put(doc.relPath, doc.id);
-      put(doc.relPath.replace(/\.md$/i, ''), doc.id);
+      put(stripDocExt(doc.relPath), doc.id);
     }
     return this.db.resolveLinks((raw) => map.get(raw.normalize('NFC').trim().toLowerCase()) ?? null, docs);
   }

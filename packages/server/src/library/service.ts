@@ -26,9 +26,11 @@ import { badRequest, HttpError, notFound } from '../http/errors.ts';
 import type { EventHub } from '../http/sse.ts';
 import type { IndexResult } from './indexer.ts';
 import { LibraryIndexer } from './indexer.ts';
-import { parseDocBuffer } from './parse.ts';
+import { parseDocBuffer, parseDerivedDoc } from './parse.ts';
 import type { ParsedDocFile } from './parse.ts';
 import { LibraryWatcher } from './watcher.ts';
+import { convertToMarkdown, isEditable, kindOf, stripDocExt } from './adapt.ts';
+import type { DocKind } from './adapt.ts';
 import { downloadImage, extractArticle, fetchPage } from './clip/extract.ts';
 import { clipKey, normalizeClipUrl } from './clip/url.ts';
 import type { ExtractedArticle } from './clip/extract.ts';
@@ -48,6 +50,9 @@ export interface DocDTO {
   size: number;
   annCount: number;
   created: string | null;
+  /** md / html / …；非 md 只读，正文由适配层转出 */
+  kind: DocKind;
+  editable: boolean;
 }
 
 export interface OutLinkDTO {
@@ -159,6 +164,7 @@ export interface LibraryStats {
 
 function toDTO(row: StoredDocRow | DocSummary): DocDTO {
   if ('rel_path' in row) {
+    const kind = kindOf(row.rel_path) ?? 'md';
     return {
       id: row.id,
       relPath: row.rel_path,
@@ -174,8 +180,11 @@ function toDTO(row: StoredDocRow | DocSummary): DocDTO {
       size: row.size,
       annCount: row.ann_count,
       created: row.created,
+      kind,
+      editable: isEditable(kind),
     };
   }
+  const kind = kindOf(row.relPath) ?? 'md';
   return {
     id: row.id,
     relPath: row.relPath,
@@ -191,6 +200,8 @@ function toDTO(row: StoredDocRow | DocSummary): DocDTO {
     size: row.size,
     annCount: row.annCount,
     created: row.created,
+    kind,
+    editable: isEditable(kind),
   };
 }
 
@@ -443,7 +454,17 @@ export class LibraryService {
       throw err;
     }
     const stat = await fsp.stat(abs);
-    const parsed = parseDocBuffer(row.rel_path, buffer, Math.round(stat.mtimeMs), stat.size);
+    const kind = kindOf(row.rel_path);
+    const parsed =
+      !kind || kind === 'md'
+        ? parseDocBuffer(row.rel_path, buffer, Math.round(stat.mtimeMs), stat.size)
+        : parseDerivedDoc(
+            row.rel_path,
+            buffer,
+            Math.round(stat.mtimeMs),
+            stat.size,
+            await convertToMarkdown(buffer, abs, row.rel_path, kind, this.root!),
+          );
     return { parsed, abs };
   }
 
@@ -559,10 +580,15 @@ export class LibraryService {
         continue;
       }
       try {
-        const buffer = await fsp.readFile(resolveInRoot(this.root, row.rel_path));
-        const { text } = decodeFile(buffer);
-        const layout = parseLayout(text);
-        const { snippet, start, end } = makeSnippet(layout.body, query);
+        const abs = resolveInRoot(this.root, row.rel_path);
+        const buffer = await fsp.readFile(abs);
+        const kind = kindOf(row.rel_path) ?? 'md';
+        // 非 md 的正文是转换出来的；直接对原始 html 抽摘要会得到一堆源码
+        const body =
+          kind === 'md'
+            ? parseLayout(decodeFile(buffer).text).body
+            : (await convertToMarkdown(buffer, abs, row.rel_path, kind, this.root)).markdown;
+        const { snippet, start, end } = makeSnippet(body, query);
         out.push({ ...this.toSearchBase(hit.doc), snippet, matchStart: start, matchEnd: end });
       } catch {
         out.push({ ...this.toSearchBase(hit.doc), snippet: hit.doc.excerpt, matchStart: 0, matchEnd: 0 });
@@ -599,6 +625,9 @@ export class LibraryService {
 
   private async saveDocLocked(id: string, input: SaveInput): Promise<SaveResult> {
     const row = this.requireDoc(id);
+    if (!isEditable(kindOf(row.rel_path))) {
+      throw new HttpError(405, 'read-only', '这个格式是只读浏览，不支持编辑');
+    }
     const abs = this.docAbs(row);
     const oldBuffer = await fsp.readFile(abs).catch((err: NodeJS.ErrnoException) => {
       if (err.code === 'ENOENT') {
@@ -701,9 +730,10 @@ export class LibraryService {
     if (!isInsideRoot(this.root, dirAbs)) throw badRequest('目录越界');
     await fsp.mkdir(dirAbs, { recursive: true });
 
-    const rawName = (input.newName ?? path.posix.basename(row.rel_path, '.md')).trim();
-    const newBase = sanitizeSegment(rawName) || path.posix.basename(row.rel_path, '.md');
-    let newAbs = path.join(dirAbs, `${newBase}.md`);
+    const ext = path.posix.extname(row.rel_path) || '.md';
+    const rawName = (input.newName ?? path.posix.basename(row.rel_path, ext)).trim();
+    const newBase = sanitizeSegment(rawName) || path.posix.basename(row.rel_path, ext);
+    let newAbs = path.join(dirAbs, `${newBase}${ext}`);
     let newRel = relativePosix(this.root, newAbs);
 
     if (path.resolve(newAbs) === path.resolve(oldAbs)) {
@@ -713,16 +743,16 @@ export class LibraryService {
       throw new HttpError(409, 'exists', '目标位置已存在同名文件', { relPath: newRel });
     }
 
-    // 先把 reader.id 落到 frontmatter，保证移动后身份不变
-    await this.ensureReaderId(row);
+    // 先把 reader.id 落到 frontmatter，保证移动后身份不变（非 md 无 frontmatter，身份靠索引记录）
+    if (isEditable(kindOf(row.rel_path))) await this.ensureReaderId(row);
 
     const oldTitle = row.title;
     const updateLinks = input.updateLinks !== false;
 
     const caseOnly =
       path.dirname(newAbs).toLowerCase() === path.dirname(oldAbs).toLowerCase() &&
-      newBase.toLowerCase() === path.basename(oldAbs, '.md').toLowerCase() &&
-      newBase !== path.basename(oldAbs, '.md');
+      newBase.toLowerCase() === path.basename(oldAbs, ext).toLowerCase() &&
+      newBase !== path.basename(oldAbs, ext);
 
     if (caseOnly) {
       const tmp = path.join(path.dirname(oldAbs), `.${path.basename(oldAbs)}.rename.tmp`);
@@ -1081,8 +1111,14 @@ export class LibraryService {
     const doc =
       docs.find((d) => d.title.normalize('NFC').toLowerCase() === needle) ??
       docs.find((d) => d.aliases.some((a) => a.normalize('NFC').toLowerCase() === needle)) ??
-      docs.find((d) => path.posix.basename(d.relPath, '.md').normalize('NFC').toLowerCase() === needle);
+      docs.find((d) => stripDocExt(path.posix.basename(d.relPath)).normalize('NFC').toLowerCase() === needle);
     if (!doc || !this.root) return null;
+    const kind = kindOf(doc.relPath);
+    if (kind && kind !== 'md') {
+      // 非 md 的正文是转换出来的，直接复用索引里的摘要，避免每次悬浮都重新解析
+      const row = this.db.getDoc(doc.id);
+      return { id: doc.id, title: doc.title, excerpt: row?.excerpt ?? '' };
+    }
     try {
       const buffer = await fsp.readFile(resolveInRoot(this.root, doc.relPath));
       const { text } = decodeFile(buffer);

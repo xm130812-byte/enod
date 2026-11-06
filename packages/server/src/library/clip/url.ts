@@ -137,14 +137,21 @@ function isPrivateIpv6(raw: string): boolean {
   return false;
 }
 
-/** 用文章页地址解析相对链接；失败返回 null。 */
+/**
+ * 用文章页地址解析相对链接；失败返回 null。
+ *
+ * 允许 file: 是因为书库里的本地 .html 用 file:// 作基准，相对图片必须先解析成 file://
+ * 才能在后续步骤里改写成库内相对路径；剪藏走网络抓取时 file:// 会在下载环节被拒掉。
+ */
 export function resolveUrl(raw: string | null | undefined, base: string): string | null {
   if (!raw) return null;
   const value = raw.trim();
   if (!value || value.startsWith('data:') || value.startsWith('blob:')) return null;
   try {
     const resolved = new URL(value, base);
-    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return null;
+    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:' && resolved.protocol !== 'file:') {
+      return null;
+    }
     return resolved.href;
   } catch {
     return null;

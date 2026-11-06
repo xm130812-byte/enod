@@ -163,3 +163,106 @@ export function parseDocBuffer(relPath: string, buffer: Buffer, mtime: number, s
     record,
   };
 }
+
+/**
+ * 非 markdown 文件：原文件只读，正文来自格式适配层转换出来的 markdown。
+ * 没有 frontmatter，所以状态 / 标签 / 批注一律取默认值；hash 仍然按原始字节算，
+ * 这样外部改动能被增量索引发现。
+ */
+export function parseDerivedDoc(
+  relPath: string,
+  buffer: Buffer,
+  mtime: number,
+  size: number,
+  derived: { title: string; markdown: string; scanLinksInCode?: boolean; binary?: boolean },
+): ParsedDocFile {
+  // 二进制格式没有"文本编码"这回事，探测出来只会是乱猜（docx 会被判成 GB18030）
+  const { encoding, eol } = derived.binary ? { encoding: 'utf8' as FileEncoding, eol: '\n' as const } : decodeFile(buffer);
+  const body = derived.markdown;
+  const headings = extractHeadings(body);
+  const title =
+    (derived.title || '').trim() ||
+    headings[0]?.text ||
+    path.basename(relPath).replace(/\.[^.]+$/, '') ||
+    relPath;
+  const hash = hashBuffer(buffer);
+  // 代码型文档整篇在围栏里，stripMarkdown 会把内容也算作代码而记 0 字，这里先去掉围栏行
+  const words = countWords(derived.scanLinksInCode ? body.replace(/^```[\w-]*$/gm, '') : body);
+  const excerpt = excerptOf(body);
+
+  const seen = new Set<string>();
+  const links: { dstRaw: string; dstAnchor: string | null }[] = [];
+  // 代码型文档（sql）整篇都在围栏里，注释是双链唯一的落脚点，不能 strip
+  const linkSource = derived.scanLinksInCode ? body : stripFencedCode(body);
+  for (const ref of extractWikiLinks(linkSource)) {
+    const key = `${ref.target}\u0000${ref.anchor ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push({ dstRaw: ref.target, dstAnchor: ref.anchor });
+  }
+
+  const layout: DocumentLayout = {
+    text: body,
+    eol,
+    hasFrontmatter: false,
+    frontmatter: null,
+    frontmatterText: '',
+    body,
+    bodyOffset: 0,
+    yamlStart: 0,
+    closingFenceStart: 0,
+  };
+
+  const record: DocRecord = {
+    id: '',
+    relPath,
+    mtime,
+    size,
+    hash,
+    title,
+    tags: [],
+    aliases: [],
+    status: 'unread',
+    progress: 0,
+    words,
+    excerpt,
+    sourceUrl: null,
+    encoding,
+    eol,
+    created: null,
+    indexedAt: Date.now(),
+    annCount: 0,
+    titleTokens: ftsTokenString(title),
+    bodyTokens: ftsTokenString(body),
+    tagsTokens: '',
+    notesTokens: '',
+    bigrams: ftsBigramString(`${title} ${body}`),
+  };
+
+  return {
+    relPath,
+    buffer,
+    mtime,
+    size,
+    hash,
+    encoding,
+    eol,
+    layout,
+    frontmatter: null,
+    body,
+    title,
+    tags: [],
+    aliases: [],
+    status: 'unread',
+    progress: 0,
+    annotations: [],
+    readerId: null,
+    created: null,
+    source: null,
+    words,
+    excerpt,
+    headings,
+    links,
+    record,
+  };
+}
