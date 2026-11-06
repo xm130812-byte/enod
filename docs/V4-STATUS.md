@@ -9,9 +9,9 @@
 |---|---|---|
 | **M7 内核迁移** | ✅ 完成 | Node ↔ Rust 契约 **23/23** 通过 |
 | **M7.5 高危项对齐** | ✅ 完成 | 金标准 **6/6 逐字一致**；分词召回 **98.01%**；剪藏真网页跑通 |
-| **M8 多端壳** | 🟡 **Windows NSIS + Linux deb 已装/已跑通**；macOS runner 不可用 | Win 安装包 **6.78 MiB**，装后 WebView2 打开书架；Linux deb **9.19 MiB**，shell 冒烟通过 |
+| **M8 多端壳** | 🟡 **Windows NSIS + Linux deb 已装/已跑通**；macOS runner 不可用 | Win 安装包 **6.80 MiB**，装后 WebView2 打开书架；Linux deb **9.19 MiB**，shell 冒烟通过 |
 | **M9 编辑体验** | ✅ 完成（含三栏 diff3） | txt/sql 保编码保 EOL **20/20**；Playwright 真浏览器 **12/12**；docx 三路径 |
-| **M10 体积与发布** | ✅ 安装包达标（Win/Linux） | Win NSIS **6.78 MiB**、Linux deb **9.19 MiB**；内核 9.87 MiB、web 2.43 MB |
+| **M10 体积与发布** | ✅ 安装包达标（Win/Linux） | Win NSIS **6.80 MiB**、Linux deb **9.19 MiB**；内核 9.87 MiB、web 2.43 MB |
 | **M11 移动只读** | ✅ 服务端 + 响应式 + 390px 实测 | token **401/200** + Cookie；390×844 无横向溢出、侧栏隐藏 |
 
 ## 1. 代码落点
@@ -213,7 +213,7 @@ bash scripts/shell-smoke.sh
 
 ### 5.3 Windows NSIS：安装 + WebView2 实测
 
-CI（windows-latest）产物 `md-reader_0.1.0_x64-setup.exe` = **7,113,784 B（6.78 MiB）**。
+CI（windows-latest）产物 `md-reader_0.1.0_x64-setup.exe` = **7,130,688 B（6.80 MiB）**。
 
 在 Windows 主机上实测：
 
@@ -257,8 +257,8 @@ bash packages/core/release.sh
 | web 资源 | ≤2.5 MB | **2,426,830 B（2.43 MB）** |
 | 二进制 xz -9 | — | **4,815,252 B（4.82 MB）**，安装包压缩后近似 |
 | Linux 便携包 tar.gz | ≤15 MB | **6,557,108 B（6.56 MB）**，内核 + web + 启动脚本 |
-| **Windows NSIS（M8）** | ≤12–15 MB | **7,113,784 B（6.78 MiB）**，per-user 安装 |
-| **Linux deb（M8）** | ≤12–15 MB | **9,640,602 B（9.19 MiB）**；安装后 18,402 KB（≤20 MB） |
+| **Windows NSIS（M8）** | ≤12–15 MB | **7,130,688 B（6.80 MiB）**，per-user 安装 |
+| **Linux deb（M8）** | ≤12–15 MB | **9,640,518 B（9.19 MiB）**；安装后 18,402 KB（≤20 MB） |
 | macOS dmg | ≤15 MB | 待 runner 可用；代码与 workflow 已就绪 |
 
 - 为压体积：`opt-level="z"`、fat LTO、`panic=abort`、strip；Shiki 只内置 8 种语法
