@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import type { UnlinkedMention } from '../api.ts';
 import type {
+  AiEntry,
+  AiJob,
+  AiKind,
   Annotation,
   AnnotationColor,
   ConflictDetail,
@@ -17,6 +20,7 @@ import type { EditorHandle } from '../editor/EditorViewPane.tsx';
 import { Toc } from './Toc.tsx';
 import type { TocItem } from './Toc.tsx';
 import { SelectionToolbar } from './SelectionToolbar.tsx';
+import { AiCard, kindLabel } from './AiCard.tsx';
 import { ColumnResizer } from './ColumnResizer.tsx';
 import { Lightbox } from './Lightbox.tsx';
 import { ConflictDialog } from './ConflictDialog.tsx';
@@ -39,7 +43,7 @@ interface ReaderPageProps {
   onOpenSearch?: () => void;
 }
 
-type PanelTab = 'notes' | 'backlinks' | 'mentions' | 'links';
+type PanelTab = 'notes' | 'ai' | 'backlinks' | 'mentions' | 'links';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
@@ -101,6 +105,8 @@ export function ReaderPage({
   const [orphans, setOrphans] = useState<string[]>([]);
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
   const [panelTab, setPanelTab] = useState<PanelTab>('notes');
+  /** 这篇文档在 AI 队列里的任务（排队/跑着/失败），完成后会变成 doc.ai 的一条。 */
+  const [aiJobs, setAiJobs] = useState<AiJob[]>([]);
   const [panelOpen, setPanelOpen] = useState<boolean>(() => {
     try {
       return localStorage.getItem('mr.reader.panel') !== '0';
@@ -558,6 +564,94 @@ export function ReaderPage({
     }
   };
 
+  /* --------------------------------------------------------------- AI 队列 */
+
+  const refreshAiJobs = async (): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      const res = await api.aiJobs({ docId: current.id });
+      setAiJobs(res.items.filter((job) => job.status === 'queued' || job.status === 'running' || job.status === 'error'));
+    } catch {
+      /* 队列查询失败不该打断阅读 */
+    }
+  };
+
+  useEffect(() => {
+    if (panelTab !== 'ai') return;
+    void refreshAiJobs();
+    const timer = window.setInterval(() => void refreshAiJobs(), 5000);
+    return () => window.clearInterval(timer);
+  }, [panelTab, docId]);
+
+  const enqueueAi = async (
+    kind: AiKind,
+    anchor?: { exact: string; prefix: string; suffix: string; pos: number },
+  ): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    const source =
+      anchor ??
+      (selection
+        ? { exact: selection.exact, prefix: selection.prefix, suffix: selection.suffix, pos: selection.pos }
+        : null);
+    if (!source && kind !== 'summarize') {
+      toast('先在正文里选中一段文字', 'error');
+      return;
+    }
+    try {
+      const res = await api.createAiJob({
+        docId: current.id,
+        kind,
+        exact: source?.exact ?? '',
+        prefix: source?.prefix ?? '',
+        suffix: source?.suffix ?? '',
+        pos: source?.pos ?? 0,
+      });
+      setPanelOpen(true);
+      setPanelTab('ai');
+      if (source) {
+        setSelection(null);
+        window.getSelection()?.removeAllRanges();
+      }
+      await refreshAiJobs();
+      toast(res.deduped ? '这条已经在队列里了' : '已入队，等 DSH 侧领走', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '入队失败', 'error');
+    }
+  };
+
+  const cancelAiJob = async (jobId: string): Promise<void> => {
+    try {
+      await api.cancelAiJob(jobId);
+      await refreshAiJobs();
+      toast('已取消', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '取消失败', 'error');
+    }
+  };
+
+  const deleteAi = async (entry: AiEntry): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    try {
+      const res = await api.deleteAiEntry(current.id, entry.id);
+      updateDoc((d) => ({ ...d, ai: res.ai ?? d.ai.filter((item) => item.id !== entry.id) }));
+      toast('已删除这条 AI 产出', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '删除失败', 'error');
+    }
+  };
+
+  const jumpToAi = (entry: AiEntry): void => {
+    const match = (docRef.current?.annotations ?? []).find((ann) => ann.exact === entry.exact);
+    if (match) {
+      jumpToAnnotation(match.id);
+      return;
+    }
+    toast('这段没有对应的高亮，用 Ctrl+K 搜片段更快', 'info');
+  };
+
   const uploadImage = async (file: File): Promise<string | null> => {
     const current = docRef.current;
     if (!current) return null;
@@ -779,6 +873,7 @@ export function ReaderPage({
   };
 
   const annotationList = doc?.annotations ?? [];
+  const aiList = doc?.ai ?? [];
   const orphanList = useMemo(() => annotationList.filter((a) => orphans.includes(a.id)), [annotationList, orphans]);
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
   const statusLabelText = doc ? statusLabel(doc.status) : '';
@@ -1176,6 +1271,9 @@ export function ReaderPage({
                   <button className={panelTab === 'notes' ? 'active' : ''} onClick={() => setPanelTab('notes')}>
                     批注 <span className="count">{annotationList.length}</span>
                   </button>
+                  <button className={panelTab === 'ai' ? 'active' : ''} onClick={() => setPanelTab('ai')}>
+                    AI <span className="count">{aiList.length + aiJobs.length}</span>
+                  </button>
                   <button className={panelTab === 'backlinks' ? 'active' : ''} onClick={() => setPanelTab('backlinks')}>
                     反链 <span className="count">{doc.backlinks.length}</span>
                   </button>
@@ -1239,6 +1337,95 @@ export function ReaderPage({
                       onJump={() => jumpToAnnotation(ann.id)}
                       onSaveNote={(note) => void saveNote(ann, note)}
                       onDelete={() => void deleteAnnotation(ann)}
+                    />
+                  ))}
+                </>
+              )}
+
+              {panelTab === 'ai' && (
+                <>
+                  <div className="panel-toolbar">
+                    <span>
+                      {aiList.length} 条产出
+                      {aiJobs.length > 0 ? ` · ${aiJobs.length} 条在队列` : ''}
+                    </span>
+                    <button
+                      className="btn btn-ghost tiny"
+                      onClick={() => void enqueueAi('summarize')}
+                      disabled={!doc.aiEnabled}
+                      title="让 AI 概括整篇"
+                    >
+                      <Icon name="sparkle" size={12} /> 概括全文
+                    </button>
+                  </div>
+                  {!doc.aiEnabled && (
+                    <p className="panel-empty">
+                      这篇文档关掉了 AI。把 frontmatter 里的 <code>reader.ai: false</code> 去掉就会重新接任务。
+                    </p>
+                  )}
+                  {aiJobs.map((job) => (
+                    <article key={job.jobId} className={`ai-item ai-job job-${job.status}`}>
+                      <header className="ai-head">
+                        <span className="ai-kind">
+                          <Icon name="sparkle" size={12} /> {kindLabel(job.kind)}
+                        </span>
+                        <span className="ai-status">
+                          {job.status === 'queued'
+                            ? '排队中'
+                            : job.status === 'running'
+                              ? '正在跑'
+                              : job.status === 'error'
+                                ? '失败'
+                                : job.status}
+                        </span>
+                        <span className="ai-when">{job.worker ? `worker: ${job.worker}` : ''}</span>
+                      </header>
+                      {job.request?.exact ? <blockquote className="ai-quote">{job.request.exact}</blockquote> : null}
+                      {job.error?.message ? <p className="ai-error">{job.error.message}</p> : null}
+                      <footer className="ai-foot">
+                        {job.status === 'queued' && (
+                          <button className="btn btn-ghost tiny" onClick={() => void cancelAiJob(job.jobId)}>
+                            取消
+                          </button>
+                        )}
+                        {job.status === 'error' && (
+                          <button
+                            className="btn btn-ghost tiny"
+                            onClick={() =>
+                              void enqueueAi(job.kind as AiKind, {
+                                exact: job.request?.exact ?? '',
+                                prefix: '',
+                                suffix: '',
+                                pos: job.request?.pos ?? 0,
+                              })
+                            }
+                          >
+                            重试
+                          </button>
+                        )}
+                      </footer>
+                    </article>
+                  ))}
+                  {aiList.length === 0 && aiJobs.length === 0 && doc.aiEnabled && (
+                    <p className="panel-empty">
+                      选中正文的一段文字，点工具条上的「解释 / 核实 / 背景 / 反问」，任务会排进队列，由 DSH 侧领走，结果写回这篇文档的{' '}
+                      <code>reader.ai[]</code>。
+                    </p>
+                  )}
+                  {aiList.map((entry) => (
+                    <AiCard
+                      key={entry.id}
+                      entry={entry}
+                      onJump={() => jumpToAi(entry)}
+                      onDelete={() => void deleteAi(entry)}
+                      onRerun={() =>
+                        void enqueueAi(entry.kind as AiKind, {
+                          exact: entry.exact,
+                          prefix: entry.prefix,
+                          suffix: entry.suffix,
+                          pos: entry.pos,
+                        })
+                      }
                     />
                   ))}
                 </>
@@ -1323,7 +1510,12 @@ export function ReaderPage({
       </div>
 
       {selection && mode === 'read' && !MOBILE_READ_ONLY && (
-        <SelectionToolbar info={selection} onColor={(color, withNote) => void createAnnotation(color, withNote)} onCopy={() => void copyQuote()} />
+        <SelectionToolbar
+          info={selection}
+          onColor={(color, withNote) => void createAnnotation(color, withNote)}
+          onCopy={() => void copyQuote()}
+          onAi={(kind) => void enqueueAi(kind)}
+        />
       )}
 
       {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}

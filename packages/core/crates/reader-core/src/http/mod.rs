@@ -9,7 +9,7 @@ use axum::extract::{DefaultBodyLimit, Request};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post};
 use axum::Router;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -84,6 +84,23 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/v1/files", get(routes::get_file))
         .route("/api/v1/clip", post(routes::clip))
         .route("/api/v1/clip/{jobId}", get(routes::clip_status))
+        .route("/api/v1/docs/{id}/ai", get(routes::list_ai))
+        .route("/api/v1/docs/{id}/ai/{aiId}", delete(routes::delete_ai))
+        .route(
+            "/api/v1/ai/jobs",
+            get(routes::ai_job_list).post(routes::ai_job_create),
+        )
+        .route("/api/v1/ai/jobs/claim", post(routes::ai_job_claim))
+        .route("/api/v1/ai/jobs/{jobId}", get(routes::ai_job_get))
+        .route(
+            "/api/v1/ai/jobs/{jobId}/complete",
+            post(routes::ai_job_complete),
+        )
+        .route("/api/v1/ai/jobs/{jobId}/fail", post(routes::ai_job_fail))
+        .route(
+            "/api/v1/ai/jobs/{jobId}/cancel",
+            post(routes::ai_job_cancel),
+        )
         .route("/api/v1/events", get(routes::events))
         .fallback(routes::fallback)
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))

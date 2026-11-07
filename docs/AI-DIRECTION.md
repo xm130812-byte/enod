@@ -129,3 +129,22 @@ DSH 会话 ──HTTP──▶ enod /ai/jobs ──▶ [claim] ──▶ 用当�
 
 - 现在这个 DSH 插件（`dsh-plugin-enod-annotations`）是 M1 的雏形：读上下文、写回结果。升级点是**把"写备注"换成"写 `reader.ai[]`"**，备注退化为用户自己的旁注。
 - enod 内核已经有任务队列（剪藏）、上下文切片、锚点重定位、SSE——M1 基本是复用，不是新造。
+
+## 11. M1 落地记录（2026-11-07）
+
+已实现，可跑通端到端：
+
+| 层 | 落地物 |
+|---|---|
+| 数据 | `reader.ai[]` 读写；`reader.ai: false` 关闭；多行输出写成 YAML 字面量块（`\|2-`），文件里直接可读 |
+| 存储 | `index.db` 的 `ai_jobs` 表（queued/running/done/error/canceled + attempts/worker/claimed_at），5 分钟超时把 running 放回队列 |
+| 接口 | `/docs/:id/ai`、`DELETE /docs/:id/ai/:aiId`、`/ai/jobs` 的入队 / 列表 / claim / complete / fail / cancel |
+| 上下文包 | claim 时返回小节标题 + 该节正文（围绕锚点截断，4000 字预算）+ 任务指令 + 提示词版本 |
+| 前端 | 选区工具条加「解释 / 核实 / 背景 / 反问」；侧栏新增 AI tab（排队中 / 失败 / 已有产出，可删、可重跑、可跳到原文） |
+| worker | 插件新增 6 个工具：`enod_ai_list` / `enod_ai_enqueue` / `enod_ai_claim` / `enod_ai_submit` / `enod_ai_fail` / `enod_ai_discard` |
+
+验收方式：CDP 实测（选中正文 → 点「解释」→ 后端出现排队任务 → worker 领活交结果 → 侧栏卡片刻渲染），
+外加 Node 端到端脚本核对 frontmatter 里的 `ai:` 块、来源、run 记录与原有 `annotations:` 块共存。
+
+**没做的（M1 之外）**：队列不会自己轮询，需要用户在 DSH 会话里说一句「处理一下队列」；段落级锚点高亮、
+书库级问答、批量任务与成本统计都留给 M2/M3。

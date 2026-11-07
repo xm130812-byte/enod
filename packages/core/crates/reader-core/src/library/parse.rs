@@ -4,8 +4,8 @@ use crate::adapt::{derived_doc_id, DocKind, DerivedDoc};
 use crate::db::DocRecord;
 use crate::encoding::{decode_file, FileEncoding};
 use crate::frontmatter::{
-    parse_layout, read_aliases, read_created, read_reader_meta, read_source, read_tags, read_title,
-    Annotation, DocStatus, DocumentLayout, SourceInfo,
+    parse_layout, read_ai_enabled, read_aliases, read_created, read_reader_meta, read_source,
+    read_tags, read_title, AiEntry, Annotation, DocStatus, DocumentLayout, SourceInfo,
 };
 use crate::hash::hash_buffer;
 use crate::markdown::{
@@ -34,6 +34,8 @@ pub struct ParsedDocFile {
     pub status: DocStatus,
     pub progress: f64,
     pub annotations: Vec<Annotation>,
+    pub ai: Vec<AiEntry>,
+    pub ai_enabled: bool,
     pub reader_id: Option<String>,
     pub created: Option<String>,
     pub source: Option<SourceInfo>,
@@ -116,6 +118,7 @@ pub fn parse_doc_buffer(rel_path: &str, buffer: &[u8], mtime: i64, size: i64) ->
     let tags = read_tags(&layout.frontmatter);
     let aliases = read_aliases(&layout.frontmatter);
     let meta = read_reader_meta(&layout.frontmatter, "");
+    let ai_enabled = read_ai_enabled(&layout.frontmatter);
     let reader_id = if meta.id.is_empty() { None } else { Some(meta.id.clone()) };
     let created = read_created(&layout.frontmatter);
     let source = read_source(&layout.frontmatter);
@@ -177,6 +180,8 @@ pub fn parse_doc_buffer(rel_path: &str, buffer: &[u8], mtime: i64, size: i64) ->
         status: meta.status,
         progress: meta.progress,
         annotations: meta.annotations,
+        ai: meta.ai,
+        ai_enabled,
         reader_id,
         created,
         source,
@@ -297,6 +302,8 @@ pub fn parse_derived_doc(
         status: DocStatus::Unread,
         progress: 0.0,
         annotations: vec![],
+        ai: Vec::new(),
+        ai_enabled: false,
         reader_id: None,
         created: None,
         source: None,

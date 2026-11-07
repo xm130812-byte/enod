@@ -1,4 +1,7 @@
 import type {
+  AiEntry,
+  AiJob,
+  AiKind,
   Annotation,
   AppConfig,
   ClipJob,
@@ -169,6 +172,41 @@ export const api = {
       `/docs/${encodeURIComponent(id)}/annotations/${encodeURIComponent(aid)}`,
       { method: 'DELETE' },
     ),
+
+  /* ---------------------------------------------------------------- AI 落位 */
+
+  aiEntries: (id: string) =>
+    request<{ items: AiEntry[]; count: number }>(`/docs/${encodeURIComponent(id)}/ai`),
+  deleteAiEntry: (id: string, aiId: string) =>
+    request<{ hash: string; count: number; ai: AiEntry[] }>(
+      `/docs/${encodeURIComponent(id)}/ai/${encodeURIComponent(aiId)}`,
+      { method: 'DELETE' },
+    ),
+  createAiJob: (input: {
+    docId: string;
+    kind?: AiKind | string;
+    exact?: string;
+    prefix?: string;
+    suffix?: string;
+    pos?: number;
+    question?: string;
+  }) =>
+    request<{ jobId: string; status: string; kind?: string; deduped?: boolean }>('/ai/jobs', {
+      method: 'POST',
+      body: input,
+    }),
+  aiJobs: (query: { status?: string; docId?: string } = {}) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
+    const qs = params.toString();
+    return request<{ items: AiJob[]; pending: number; running: number }>(`/ai/jobs${qs ? `?${qs}` : ''}`);
+  },
+  aiJob: (jobId: string) => request<AiJob>(`/ai/jobs/${encodeURIComponent(jobId)}`),
+  cancelAiJob: (jobId: string) =>
+    request<{ jobId: string; status: string }>(`/ai/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: 'POST',
+      body: {},
+    }),
 
   search: (q: string, limit = 30) =>
     request<SearchResult[]>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),

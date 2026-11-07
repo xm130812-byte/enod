@@ -306,6 +306,95 @@ pub async fn doc_export(
         .into_response())
 }
 
+/* ------------------------------------------------------------------------ AI */
+
+pub async fn list_ai(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> AppResult<Response> {
+    let row = state.service.require_doc(&id).await?;
+    let entries = state.service.ai_entries(&row).await?;
+    json_ok(json!({ "items": entries, "count": entries.len() }))
+}
+
+pub async fn delete_ai(
+    State(state): State<AppState>,
+    Path((id, aid)): Path<(String, String)>,
+) -> AppResult<Response> {
+    json_ok(state.service.delete_ai_entry(&id, &aid).await?)
+}
+
+pub async fn ai_job_create(
+    State(state): State<AppState>,
+    body: Option<Json<Value>>,
+) -> AppResult<Response> {
+    let body = body_json(body).await;
+    let map = obj(&body);
+    let Some(doc_id) = str_field(&map, "docId") else {
+        return Err(AppError::bad_request("需要 docId"));
+    };
+    let request = crate::library::ai::AiRequest {
+        kind: str_field(&map, "kind"),
+        exact: str_field(&map, "exact"),
+        prefix: str_field(&map, "prefix"),
+        suffix: str_field(&map, "suffix"),
+        pos: map.get("pos").and_then(|v| v.as_f64()),
+        question: str_field(&map, "question"),
+    };
+    json_ok(state.service.enqueue_ai_job(&doc_id, request).await?)
+}
+
+pub async fn ai_job_list(State(state): State<AppState>, q: Q) -> AppResult<Response> {
+    let status = q.get("status").cloned().filter(|s| !s.is_empty());
+    let doc_id = q.get("docId").cloned().filter(|s| !s.is_empty());
+    json_ok(state.service.list_ai_jobs(status, doc_id).await?)
+}
+
+/// worker 领活：没有排队任务时返回 `{ "job": null }`，让插件自己决定多久再问。
+pub async fn ai_job_claim(State(state): State<AppState>, q: Q) -> AppResult<Response> {
+    let worker = q.get("worker").cloned().unwrap_or_default();
+    match state.service.claim_ai_job(&worker).await? {
+        Some(package) => json_ok(json!({ "job": package })),
+        None => json_ok(json!({ "job": Value::Null })),
+    }
+}
+
+pub async fn ai_job_get(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+) -> AppResult<Response> {
+    json_ok(state.service.ai_job_status(&job_id).await?)
+}
+
+pub async fn ai_job_complete(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+    body: Option<Json<Value>>,
+) -> AppResult<Response> {
+    let body = body_json(body).await;
+    let input: crate::library::ai::AiResultInput = serde_json::from_value(body)
+        .map_err(|e| AppError::bad_request(format!("结果格式不对：{e}")))?;
+    json_ok(state.service.complete_ai_job(&job_id, input).await?)
+}
+
+pub async fn ai_job_fail(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+    body: Option<Json<Value>>,
+) -> AppResult<Response> {
+    let body = body_json(body).await;
+    let map = obj(&body);
+    let message = str_field(&map, "message").unwrap_or_else(|| "worker 未给出原因".into());
+    json_ok(state.service.fail_ai_job(&job_id, &message).await?)
+}
+
+pub async fn ai_job_cancel(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+) -> AppResult<Response> {
+    json_ok(state.service.cancel_ai_job(&job_id).await?)
+}
+
 /* ------------------------------------------------------------------ annotations */
 
 pub async fn add_annotation(

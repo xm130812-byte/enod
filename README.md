@@ -237,7 +237,7 @@ md-reader/
 │  ├─ src/components/                # 书架、阅读器、面板、弹层、搜索、设置
 │  ├─ src/editor/                    # CodeMirror 6 + Live Preview 装饰
 │  └─ src/lib/                       # markdown-it 管线、批注重锚定、Shiki、文内查找
-├─ sample-library/                   # 转换金标准夹具（docx/html/sql/txt），不是书库
+├─ sample-library/                   # 测试书库：契约双跑 + 金标准夹具都用它，不是你的书库
 ├─ scripts/                          # 构建、打包、契约、召回、e2e、截图、同步
 └─ docs/                             # V4-STATUS / TRACK / PACKAGING / UI-DESIGN / TRAY-DESIGN
 ```
@@ -258,7 +258,7 @@ reader:
   id: 01M6PEGRCN1EKDDN8MCEYVHY88   # ULID，文档身份，重命名/移动不变
   status: reading                  # unread | reading | done
   progress: 0.62
-  annotations:
+  annotations:                     # 你自己写的旁注
     - id: 01M6PEGRC...
       exact: "决定战争胜负的是人不是物"
       prefix: "我们常说，"
@@ -267,6 +267,27 @@ reader:
       color: yellow
       note: "和第四节呼应"
       created: 2026-11-05T22:41:00+08:00
+  ai:                              # AI 产出，与旁注分开放（见 docs/AI-DIRECTION.md）
+    - id: 01M6V7FHE...
+      kind: explain                # explain | verify | background | counter | summarize | ask
+      exact: "决定战争胜负的是人不是物"
+      prefix: "我们常说，"
+      suffix: "，这是历史唯物主义的观点。"
+      pos: 96
+      status: ok                   # ok | error | stale
+      created: 2026-11-07T14:48:00.000Z
+      output: |2-                  # 多行写成字面量块，文件里直接可读
+        一句话：这是《论持久战》的胜负观。
+        - 对照：武器决定论
+      sources:
+        - title: 论持久战
+          url: https://example.com/a
+      run:                         # 谁、用什么提示词、跑多久
+        model: deepseek-v4
+        prompt: enod-ai-v1
+        started: 2026-11-07T14:47:58.000Z
+        ms: 2100
+        job: 01M6V7FHEFE6XA930SX8MJ5RTD
 ---
 
 正文……
@@ -275,6 +296,7 @@ reader:
 写入规则（Rust 与 Node 两侧均有测试覆盖）：
 
 - **只写 `reader:` 与 `source:`**，绝不覆盖用户字段；
+- `reader.annotations[]` 是**你**的旁注，`reader.ai[]` 是 AI 产出，两边互不覆盖；`reader.ai: false` 可关掉某篇的 AI；
 - 修改 frontmatter 用**局部行替换**，保留键序、注释与缩进，`git diff` 只有目标行；
 - **原子写**：同目录 `.tmp` → `fsync` → `rename` → 目录 `fsync`；
 - 写回前快照到 `<data-dir>/versions/<docId>/`，默认保留 20 版；
@@ -325,7 +347,13 @@ Tauri v2 壳 ── spawn core / 托盘 / 唤起 Chrome 或开 WebView2 窗口
 | **POST** | **`/docs/:id/convert`** | **v4**：生成 md 副本，返回新 docId |
 | **GET** | **`/docs/:id/export`** | **v4**：导出 markdown（下载） |
 | **POST** | **`/docs/:id/open`** | **v4**：用系统关联程序打开原文件 |
-| GET | `/events` | SSE：index-progress / doc-changed / doc-removed / links-changed / clip-progress |
+| **GET** | **`/docs/:id/ai`** | **AI**：这篇文档的 `reader.ai[]` 产出 |
+| **DELETE** | **`/docs/:id/ai/:aiId`** | **AI**：删一条产出 |
+| **POST** | **`/ai/jobs`** | **AI**：入队 `{docId, kind, exact, prefix, suffix, pos, question}` |
+| **GET** | **`/ai/jobs`** | **AI**：队列（`?status=` / `?docId=`） |
+| **POST** | **`/ai/jobs/claim`** | **AI**：worker 领活，返回任务 + 已组装上下文包 |
+| **POST** | **`/ai/jobs/:jobId/complete`** · **`/fail`** · **`/cancel`** | **AI**：交结果（写进 `reader.ai[]`）/ 报失败 / 取消 |
+| GET | `/events` | SSE：index-progress / doc-changed / doc-removed / links-changed / clip-progress / ai-job / ai-result |
 
 **安全**：仅绑定 `127.0.0.1`（LAN 模式需 token）；变更请求必须 `X-Reader-Client: 1` + JSON（图片除外），跨源 `Origin` 一律 403；CSP 禁 inline script（Shiki 的 WASM 额外放行 `'wasm-unsafe-eval'`）；LAN 模式下服务端**一律只读**。
 

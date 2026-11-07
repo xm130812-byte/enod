@@ -44,3 +44,23 @@ CREATE TABLE IF NOT EXISTS annotations_mirror (
 CREATE INDEX IF NOT EXISTS ann_doc ON annotations_mirror(doc_id);
 
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+
+-- AI 任务队列：enod 只做落位与调度，模型执行在外部 worker（DSH 插件）
+CREATE TABLE IF NOT EXISTS ai_jobs (
+  id          TEXT PRIMARY KEY,
+  doc_id      TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'queued',
+  request     TEXT NOT NULL DEFAULT '{}',
+  result      TEXT,
+  error       TEXT,
+  worker      TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  ai_id       TEXT,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  claimed_at  INTEGER,
+  finished_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS ai_jobs_status ON ai_jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS ai_jobs_doc ON ai_jobs(doc_id, created_at);

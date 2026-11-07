@@ -1,5 +1,6 @@
 //! 书库服务：文档 CRUD、搜索、预览、配置与索引编排（移植自 v3 service.ts）。
 
+pub mod ai;
 pub mod annotations;
 pub mod assets;
 pub mod clip_jobs;
@@ -13,7 +14,7 @@ use crate::db::{Db, DocRow, ListOptions};
 use crate::encoding::{decode_file, encode_file, FileEncoding};
 use crate::error::{AppError, AppResult};
 use crate::frontmatter::{
-    apply_document_edits, build_frontmatter, parse_layout, read_reader_meta, Annotation,
+    apply_document_edits, build_frontmatter, parse_layout, read_reader_meta, AiEntry, Annotation,
     BuildFrontmatter, DocStatus, DocumentEdits, ReaderPatch, SourceInfo,
 };
 use crate::hash::hash_buffer;
@@ -106,6 +107,9 @@ pub struct DocPayload {
     pub encoding: String,
     pub eol: String,
     pub annotations: Vec<Annotation>,
+    /// AI 落进文档的产出（reader.ai[]）；用户旁注仍在 annotations 里。
+    pub ai: Vec<AiEntry>,
+    pub ai_enabled: bool,
     pub links: Vec<OutLinkDTO>,
     pub backlinks: Vec<BacklinkDTO>,
     pub headings: Vec<HeadingRef>,
@@ -195,6 +199,8 @@ pub struct Loaded {
     pub encoding: FileEncoding,
     pub eol: String,
     pub annotations: Vec<Annotation>,
+    pub ai: Vec<AiEntry>,
+    pub ai_enabled: bool,
     pub headings: Vec<HeadingRef>,
     pub frontmatter: Option<Value>,
     pub has_frontmatter: bool,
@@ -563,6 +569,8 @@ impl LibraryService {
                     encoding: parsed.encoding,
                     eol: parsed.eol,
                     annotations: parsed.annotations,
+                    ai: parsed.ai,
+                    ai_enabled: parsed.ai_enabled,
                     headings: parsed.headings,
                     frontmatter: parsed.frontmatter,
                     has_frontmatter: parsed.layout.has_frontmatter,
@@ -583,6 +591,8 @@ impl LibraryService {
                     encoding: decoded.encoding,
                     eol: decoded.eol,
                     annotations: sidecar.annotations,
+                    ai: Vec::new(),
+                    ai_enabled: false,
                     headings,
                     frontmatter: None,
                     has_frontmatter: false,
@@ -602,6 +612,8 @@ impl LibraryService {
                     encoding: parsed.encoding,
                     eol: parsed.eol,
                     annotations: sidecar.annotations,
+                    ai: Vec::new(),
+                    ai_enabled: false,
                     headings: parsed.headings,
                     frontmatter: None,
                     has_frontmatter: false,
@@ -658,6 +670,8 @@ impl LibraryService {
             encoding: loaded.encoding.as_str().to_string(),
             eol: loaded.eol,
             annotations: loaded.annotations,
+            ai: loaded.ai,
+            ai_enabled: loaded.ai_enabled,
             links,
             backlinks,
             headings: loaded.headings,

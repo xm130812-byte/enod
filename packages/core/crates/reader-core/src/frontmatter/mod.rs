@@ -109,12 +109,69 @@ impl SourceInfo {
     }
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AiSource {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub url: String,
+}
+
+/// 一条 AI 产出的来源记录：谁在什么提示词下、花多久跑出来的。
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AiRun {
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub prompt: String,
+    #[serde(default)]
+    pub started: String,
+    #[serde(default)]
+    pub ms: i64,
+    #[serde(default)]
+    pub job: String,
+}
+
+/// `reader.ai[]`：AI 落进文档的产出。用户自己的旁注仍写在 `reader.annotations[]`。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AiEntry {
+    pub id: String,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub exact: String,
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+    #[serde(default)]
+    pub pos: i64,
+    #[serde(default)]
+    pub output: String,
+    #[serde(default)]
+    pub sources: Vec<AiSource>,
+    /// ok | error | stale
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub created: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<AiRun>,
+}
+
+pub const AI_KINDS: [&str; 6] = ["explain", "verify", "background", "counter", "summarize", "ask"];
+
+pub fn is_ai_kind(value: &str) -> bool {
+    AI_KINDS.contains(&value)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ReaderMeta {
     pub id: String,
     pub status: DocStatus,
     pub progress: f64,
     pub annotations: Vec<Annotation>,
+    pub ai: Vec<AiEntry>,
 }
 
 fn line_start_after(text: &str, index: usize) -> usize {
@@ -340,7 +397,94 @@ pub fn read_reader_meta(frontmatter: &Option<Value>, fallback_id: &str) -> Reade
         status,
         progress,
         annotations,
+        ai: read_ai_entries(frontmatter),
     }
+}
+
+/// 解析 `reader.ai[]`。`reader.ai: false` 时视为关闭，返回空。
+pub fn read_ai_entries(frontmatter: &Option<Value>) -> Vec<AiEntry> {
+    let reader = as_object(frontmatter)
+        .and_then(|m| m.get("reader"))
+        .and_then(|v| v.as_object());
+    let Some(items) = reader.and_then(|r| r.get("ai")).and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for raw in items {
+        let Some(obj) = raw.as_object() else { continue };
+        let id = obj
+            .get("id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("ai-{}", out.len() + 1));
+        let sources = obj
+            .get("sources")
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|s| {
+                        let o = s.as_object()?;
+                        Some(AiSource {
+                            title: o
+                                .get("title")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            url: o
+                                .get("url")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let run = obj.get("run").and_then(|v| v.as_object()).map(|r| AiRun {
+            model: r.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            prompt: r.get("prompt").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            started: r.get("started").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            ms: r.get("ms").and_then(|v| v.as_i64()).unwrap_or(0),
+            job: r.get("job").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        });
+        out.push(AiEntry {
+            id,
+            kind: obj.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            exact: obj.get("exact").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            prefix: obj.get("prefix").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            suffix: obj.get("suffix").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            pos: obj.get("pos").and_then(|v| v.as_f64()).filter(|f| f.is_finite()).map(|f| f as i64).unwrap_or(0),
+            output: obj.get("output").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            sources,
+            status: obj
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("ok")
+                .to_string(),
+            created: obj.get("created").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            run,
+        });
+    }
+    out
+}
+
+/// `reader.ai: false` 或 `reader.aiEnabled: false` 时，这篇文档不接 AI 任务。
+pub fn read_ai_enabled(frontmatter: &Option<Value>) -> bool {
+    let Some(reader) = as_object(frontmatter)
+        .and_then(|m| m.get("reader"))
+        .and_then(|v| v.as_object())
+    else {
+        return true;
+    };
+    if let Some(Value::Bool(false)) = reader.get("ai") {
+        return false;
+    }
+    if let Some(Value::Bool(false)) = reader.get("aiEnabled") {
+        return false;
+    }
+    true
 }
 
 pub fn read_tags(frontmatter: &Option<Value>) -> Vec<String> {
@@ -511,6 +655,7 @@ pub struct ReaderPatch {
     pub status: Option<DocStatus>,
     pub progress: Option<f64>,
     pub annotations: Option<Vec<Annotation>>,
+    pub ai: Option<Vec<AiEntry>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -588,6 +733,10 @@ pub fn apply_document_edits(layout: &DocumentLayout, edits: &DocumentEdits) -> S
                 })
                 .collect();
             editor.set_list(&["reader", "annotations"], &items);
+        }
+        if let Some(entries) = &reader.ai {
+            let value = serde_json::to_value(entries).unwrap_or(serde_json::Value::Array(vec![]));
+            editor.set_json_block(&["reader", "ai"], &value);
         }
     }
 

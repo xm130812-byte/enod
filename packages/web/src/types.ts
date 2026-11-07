@@ -39,6 +39,57 @@ export interface Annotation {
   created: string;
 }
 
+/** AI 任务类型：解释 / 核实 / 背景 / 反例 / 概括 / 自由提问 */
+export type AiKind = 'explain' | 'verify' | 'background' | 'counter' | 'summarize' | 'ask';
+
+export interface AiSource {
+  title: string;
+  url: string;
+}
+
+/** 一次 run 的元信息：谁、用什么提示词、跑多久。 */
+export interface AiRun {
+  model: string;
+  prompt: string;
+  started: string;
+  ms: number;
+  job: string;
+}
+
+/** `reader.ai[]`：AI 落进文档的产出，和用户自己的批注分开。 */
+export interface AiEntry {
+  id: string;
+  kind: AiKind | string;
+  exact: string;
+  prefix: string;
+  suffix: string;
+  pos: number;
+  output: string;
+  sources: AiSource[];
+  status: string;
+  created: string;
+  run?: AiRun;
+}
+
+export type AiJobStatus = 'queued' | 'running' | 'done' | 'error' | 'canceled';
+
+export interface AiJob {
+  jobId: string;
+  docId: string;
+  kind: string;
+  status: AiJobStatus;
+  attempts: number;
+  worker: string | null;
+  aiId: string | null;
+  request: { exact?: string; pos?: number; question?: string } | null;
+  result: unknown;
+  error: { message?: string } | null;
+  createdAt: number;
+  updatedAt: number;
+  claimedAt: number | null;
+  finishedAt: number | null;
+}
+
 export interface OutLink {
   dstId: string | null;
   dstRaw: string;
@@ -76,6 +127,10 @@ export interface DocPayload extends DocSummary {
   encoding: string;
   eol: '\n' | '\r\n';
   annotations: Annotation[];
+  /** AI 产出（reader.ai[]），与上面的用户批注并列 */
+  ai: AiEntry[];
+  /** 这篇文档是否允许接 AI 任务（reader.ai: false 时关闭） */
+  aiEnabled: boolean;
   links: OutLink[];
   backlinks: Backlink[];
   headings: Heading[];

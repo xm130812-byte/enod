@@ -917,6 +917,225 @@ impl Db {
         })
         .await
     }
+
+    /* -------------------------------------------------------------- AI 任务 */
+
+    pub async fn ai_job_insert(&self, job: AiJobRow) -> AppResult<()> {
+        self.call(move |conn| {
+            conn.execute(
+                "INSERT INTO ai_jobs(id, doc_id, kind, status, request, created_at, updated_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    job.id,
+                    job.doc_id,
+                    job.kind,
+                    job.status,
+                    job.request,
+                    job.created_at,
+                    job.updated_at
+                ],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn ai_job_get(&self, id: &str) -> AppResult<Option<AiJobRow>> {
+        let id = id.to_string();
+        self.call(move |conn| {
+            conn.query_row("SELECT * FROM ai_jobs WHERE id = ?1", [&id], row_to_ai_job)
+                .optional()
+        })
+        .await
+    }
+
+    /// 领取一条排队任务。DB 只有一个线程，读+改写天然是原子的。
+    pub async fn ai_job_claim(&self, worker: &str) -> AppResult<Option<AiJobRow>> {
+        let worker = worker.to_string();
+        self.call(move |conn| {
+            let picked = {
+                let mut stmt = conn.prepare(
+                    "SELECT * FROM ai_jobs WHERE status = 'queued' ORDER BY created_at LIMIT 1",
+                )?;
+                stmt.query_row([], row_to_ai_job).optional()?
+            };
+            let Some(mut job) = picked else {
+                return Ok(None);
+            };
+            let now = chrono::Utc::now().timestamp_millis();
+            conn.execute(
+                "UPDATE ai_jobs
+                    SET status = 'running', worker = ?1, attempts = attempts + 1,
+                        claimed_at = ?2, updated_at = ?2
+                  WHERE id = ?3",
+                params![worker, now, job.id],
+            )?;
+            job.status = "running".into();
+            job.worker = Some(worker);
+            job.attempts += 1;
+            job.claimed_at = Some(now);
+            job.updated_at = now;
+            Ok(Some(job))
+        })
+        .await
+    }
+
+    pub async fn ai_job_finish(
+        &self,
+        id: &str,
+        status: &str,
+        result: Option<String>,
+        error: Option<String>,
+        ai_id: Option<String>,
+    ) -> AppResult<()> {
+        let id = id.to_string();
+        let status = status.to_string();
+        self.call(move |conn| {
+            let now = chrono::Utc::now().timestamp_millis();
+            conn.execute(
+                "UPDATE ai_jobs
+                    SET status = ?1, result = COALESCE(?2, result), error = ?3,
+                        ai_id = COALESCE(?4, ai_id), updated_at = ?5, finished_at = ?5
+                  WHERE id = ?6",
+                params![status, result, error, ai_id, now, id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 把超时未交回的 running 任务放回队列，避免 worker 崩了任务卡死。
+    pub async fn ai_job_requeue_stale(&self, stale_ms: i64) -> AppResult<usize> {
+        self.call(move |conn| {
+            let now = chrono::Utc::now().timestamp_millis();
+            let cutoff = now - stale_ms;
+            let n = conn.execute(
+                "UPDATE ai_jobs SET status = 'queued', worker = NULL, updated_at = ?1
+                  WHERE status = 'running' AND updated_at < ?2",
+                params![now, cutoff],
+            )?;
+            Ok(n)
+        })
+        .await
+    }
+
+    pub async fn ai_job_cancel(&self, id: &str) -> AppResult<bool> {
+        let id = id.to_string();
+        self.call(move |conn| {
+            let now = chrono::Utc::now().timestamp_millis();
+            let n = conn.execute(
+                "UPDATE ai_jobs SET status = 'canceled', updated_at = ?1, finished_at = ?1
+                  WHERE id = ?2 AND status IN ('queued', 'running')",
+                params![now, id],
+            )?;
+            Ok(n > 0)
+        })
+        .await
+    }
+
+    pub async fn ai_jobs_list(
+        &self,
+        status: Option<String>,
+        doc_id: Option<String>,
+        limit: i64,
+    ) -> AppResult<Vec<AiJobRow>> {
+        self.call(move |conn| {
+            let mut sql = String::from("SELECT * FROM ai_jobs WHERE 1 = 1");
+            if status.is_some() {
+                sql.push_str(" AND status = ?1");
+            }
+            if doc_id.is_some() {
+                sql.push_str(if status.is_some() {
+                    " AND doc_id = ?2"
+                } else {
+                    " AND doc_id = ?1"
+                });
+            }
+            sql.push_str(" ORDER BY created_at DESC LIMIT ");
+            sql.push_str(&limit.clamp(1, 500).to_string());
+            let mut stmt = conn.prepare(&sql)?;
+            let mut out = Vec::new();
+            match (status, doc_id) {
+                (Some(s), Some(d)) => {
+                    let rows = stmt.query_map(params![s, d], row_to_ai_job)?;
+                    for r in rows {
+                        out.push(r?);
+                    }
+                }
+                (Some(s), None) => {
+                    let rows = stmt.query_map(params![s], row_to_ai_job)?;
+                    for r in rows {
+                        out.push(r?);
+                    }
+                }
+                (None, Some(d)) => {
+                    let rows = stmt.query_map(params![d], row_to_ai_job)?;
+                    for r in rows {
+                        out.push(r?);
+                    }
+                }
+                (None, None) => {
+                    let rows = stmt.query_map([], row_to_ai_job)?;
+                    for r in rows {
+                        out.push(r?);
+                    }
+                }
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    /// 清掉早就结束的任务记录（保留 7 天足够排查）。
+    pub async fn ai_jobs_purge(&self, older_than_ms: i64) -> AppResult<usize> {
+        self.call(move |conn| {
+            let cutoff = chrono::Utc::now().timestamp_millis() - older_than_ms;
+            let n = conn.execute(
+                "DELETE FROM ai_jobs
+                  WHERE status IN ('done', 'error', 'canceled') AND updated_at < ?1",
+                params![cutoff],
+            )?;
+            Ok(n)
+        })
+        .await
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AiJobRow {
+    pub id: String,
+    pub doc_id: String,
+    pub kind: String,
+    pub status: String,
+    pub request: String,
+    pub result: Option<String>,
+    pub error: Option<String>,
+    pub worker: Option<String>,
+    pub attempts: i64,
+    pub ai_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub claimed_at: Option<i64>,
+    pub finished_at: Option<i64>,
+}
+
+fn row_to_ai_job(row: &rusqlite::Row<'_>) -> rusqlite::Result<AiJobRow> {
+    Ok(AiJobRow {
+        id: row.get("id")?,
+        doc_id: row.get("doc_id")?,
+        kind: row.get("kind")?,
+        status: row.get("status")?,
+        request: row.get("request")?,
+        result: row.get("result")?,
+        error: row.get("error")?,
+        worker: row.get("worker")?,
+        attempts: row.get("attempts")?,
+        ai_id: row.get("ai_id")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        claimed_at: row.get("claimed_at")?,
+        finished_at: row.get("finished_at")?,
+    })
 }
 
 #[derive(Clone, Debug)]

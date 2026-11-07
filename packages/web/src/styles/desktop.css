@@ -1370,6 +1370,28 @@
 .toolbar-btn {
   border-radius: 5px;
 }
+/* 选区工具条上的 AI 分组：跟颜色点、批注按钮区分开 */
+.toolbar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  user-select: none;
+}
+.toolbar-btn.ai {
+  color: var(--accent);
+}
+.toolbar-btn.ai:hover {
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.ai-item {
+  border-radius: 6px;
+}
 
 /* ------------------------------------------------------------ 剪藏 */
 
