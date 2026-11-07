@@ -9,7 +9,7 @@ reader:
   progress: 0.35
   annotations: []
 ---
-
+e
 # SQLite FTS5 中文检索
 
 FTS5 自带的 `unicode61` 分词器不认识中文词边界：它会把一整串汉字当成一个 token，于是搜「持久战」搜不到「论持久战」里的那三个字。
