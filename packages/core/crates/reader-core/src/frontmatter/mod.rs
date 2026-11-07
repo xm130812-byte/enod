@@ -536,6 +536,28 @@ pub fn read_title(frontmatter: &Option<Value>) -> Option<String> {
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+        // 「未命名」这类是创建时的占位符，不是标题：当它不存在，好让上层回退到
+        // 正文的第一个标题、再回退到文件名（否则占位符会被当成真标题永久保留）
+        .filter(|s| !is_placeholder_title(s))
+}
+
+/// 创建文档时没给名字留下的占位标题。
+const PLACEHOLDER_TITLES: [&str; 7] = [
+    "未命名",
+    "无标题",
+    "新建文档",
+    "新文档",
+    "untitled",
+    "new document",
+    "new note",
+];
+
+pub fn is_placeholder_title(value: &str) -> bool {
+    let trimmed = value.trim();
+    trimmed.is_empty()
+        || PLACEHOLDER_TITLES
+            .iter()
+            .any(|placeholder| trimmed.eq_ignore_ascii_case(placeholder))
 }
 
 pub fn read_created(frontmatter: &Option<Value>) -> Option<String> {
@@ -758,6 +780,18 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = "---\ntitle: Hello\ntags: [a, b]\nreader:\n  id: 01ABC\n  status: reading\n  progress: 0.2\n  annotations: []\n---\nBody text\n";
+
+    #[test]
+    fn placeholder_title_is_not_a_title() {
+        for raw in ["未命名", "untitled", " Untitled ", "新文档", ""] {
+            assert!(is_placeholder_title(raw), "{raw} 应视为占位符");
+        }
+        assert!(!is_placeholder_title("论持久战"));
+        let text = "---\ntitle: 未命名\nreader:\n  id: 01A\n---\n# 真标题\n";
+        let layout = parse_layout(text);
+        // 占位符不算标题，好让上层回退到正文的 H1
+        assert_eq!(read_title(&layout.frontmatter), None);
+    }
 
     #[test]
     fn parses_layout_and_meta() {

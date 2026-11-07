@@ -296,6 +296,8 @@ reader:
 写入规则（Rust 与 Node 两侧均有测试覆盖）：
 
 - **只写 `reader:` 与 `source:`**，绝不覆盖用户字段；
+- 标题解析顺序：frontmatter `title` → 正文第一个标题 → 文件名；`未命名`/`untitled` 这类占位符**不算标题**，
+  所以「新建 → 粘内容 → 保存」不会永远停在未命名；
 - `reader.annotations[]` 是**你**的旁注，`reader.ai[]` 是 AI 产出，两边互不覆盖；`reader.ai: false` 可关掉某篇的 AI；
 - 修改 frontmatter 用**局部行替换**，保留键序、注释与缩进，`git diff` 只有目标行；
 - **原子写**：同目录 `.tmp` → `fsync` → `rename` → 目录 `fsync`；

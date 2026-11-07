@@ -20,7 +20,7 @@ use crate::frontmatter::{
 use crate::hash::hash_buffer;
 use crate::http::sse::EventHub;
 use crate::indexer::{IndexResult, LibraryIndexer};
-use crate::markdown::{extract_headings, js_len, HeadingRef};
+use crate::markdown::{extract_headings, first_heading_text, js_len, HeadingRef};
 use crate::paths::{
     data_paths, ensure_data_dirs, is_inside_root, relative_posix, resolve_in_root, DataPaths,
 };
@@ -862,11 +862,20 @@ impl LibraryService {
                 let layout = parse_layout(&decoded.text);
                 let mut reader = input.reader.clone().unwrap_or_default();
                 reader.id = Some(id.to_string());
+                // 保存时顺手补标题：frontmatter 里没有标题（或只有「未命名」占位符）时，
+                // 用正文第一个标题顶上。否则「新建 → 粘内容 → 保存」会永远停在未命名。
+                let mut title_edit = input.title.clone();
+                if title_edit.is_none()
+                    && crate::frontmatter::read_title(&layout.frontmatter).is_none()
+                {
+                    let body_for_title = input.body.as_deref().unwrap_or(&layout.body);
+                    title_edit = first_heading_text(body_for_title);
+                }
                 let new_text = apply_document_edits(
                     &layout,
                     &DocumentEdits {
                         body: input.body.clone(),
-                        title: input.title.clone(),
+                        title: title_edit,
                         tags: input.tags.clone(),
                         reader: Some(reader),
                     },
@@ -1001,8 +1010,16 @@ impl LibraryService {
         }
         tokio::fs::create_dir_all(&dir_abs).await?;
 
-        let title = input.title.as_deref().unwrap_or("").trim();
-        let title = if title.is_empty() { "未命名" } else { title };
+        // 没给标题时先看正文里的第一个标题，再退回占位名——
+        // 免得「粘一段带 # 标题的内容进来」也被记成「未命名」
+        let mut title = input.title.as_deref().unwrap_or("").trim().to_string();
+        if crate::frontmatter::is_placeholder_title(&title) {
+            if let Some(heading) = input.content.as_deref().and_then(first_heading_text) {
+                title = heading;
+            }
+        }
+        let title = if title.is_empty() { "未命名".to_string() } else { title };
+        let title = title.as_str();
         let base_name = {
             let s = sanitize_segment(title);
             if s.is_empty() { "未命名".to_string() } else { s }

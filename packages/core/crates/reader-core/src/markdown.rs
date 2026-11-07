@@ -106,8 +106,7 @@ fn fence_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"^\s{0,3}(`{3,}|~{3,})").unwrap())
 }
 
-pub fn extract_headings(body: &str) -> Vec<HeadingRef> {
-    let mut out = Vec::new();
+pub fn extract_headings(body: &str) -> Vec<HeadingRef> {    let mut out = Vec::new();
     let mut used: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     let mut in_fence = false;
     let mut fence_marker = '\0';
@@ -285,6 +284,21 @@ fn latin_re() -> &'static Regex {
     RE.get_or_init(|| {
         Regex::new(r"[A-Za-z0-9_]+(?:['’-][A-Za-z0-9_]+)*").unwrap()
     })
+}
+
+/// 正文里的第一个标题文本（优先一级标题），用来给没起名的文档兜底。
+pub fn first_heading_text(body: &str) -> Option<String> {
+    let headings = extract_headings(body);
+    let pick = headings
+        .iter()
+        .find(|heading| heading.level == 1)
+        .or_else(|| headings.first())?;
+    let text = pick.text.trim();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text.to_string())
+    }
 }
 
 /// 混合中英文的字数：CJK 按字计，拉丁按词计。
