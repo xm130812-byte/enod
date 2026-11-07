@@ -1514,6 +1514,8 @@ export function ReaderPage({
                       key={entry.id}
                       entry={entry}
                       focused={focusAiId === entry.id}
+                      resolveWiki={resolveWiki}
+                      onNavigateWiki={handleWikiNavigate}
                       onJump={() => jumpToAi(entry)}
                       onDelete={() => void deleteAi(entry)}
                       onRerun={() =>

@@ -576,6 +576,8 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
             onRerun={() => propsRef.current.onAiRerun(entry)}
             onDelete={() => propsRef.current.onAiDelete(entry)}
             onOpenPanel={() => propsRef.current.onAiClick(entry.id)}
+            resolveWiki={propsRef.current.resolveWiki}
+            onNavigateWiki={propsRef.current.onNavigateWiki}
           />
         );
       })}

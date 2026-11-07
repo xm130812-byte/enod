@@ -1,4 +1,5 @@
 import type { AiEntry } from '../types.ts';
+import { AiMarkdown } from './AiMarkdown.tsx';
 import { Icon } from './Icons.tsx';
 
 const KIND_LABEL: Record<string, string> = {
@@ -21,13 +22,15 @@ interface AiCardProps {
   onJump: () => void;
   onDelete: () => void;
   onRerun: () => void;
+  resolveWiki?: (target: string, anchor?: string) => { href: string } | null;
+  onNavigateWiki?: (href: string, anchor: string | null) => void;
 }
 
 /**
- * 侧栏里的一条 AI 产出。刻意不渲染 Markdown：
- * AI 的输出原样保留换行，避免把模型给的半成品结构渲染成正文的一部分。
+ * 侧栏里的一条 AI 产出。正文按 Markdown 渲染（模型给的结构不该白写），
+ * 但走的是 AI 专用的净化 + 卡片排版，不套正文那套（无图片、无 Shiki）。
  */
-export function AiCard({ entry, focused = false, onJump, onDelete, onRerun }: AiCardProps) {
+export function AiCard({ entry, focused = false, onJump, onDelete, onRerun, resolveWiki, onNavigateWiki }: AiCardProps) {
   const label = kindLabel(entry.kind);
   const when = entry.created ? entry.created.slice(0, 16).replace('T', ' ') : '';
   return (
@@ -44,7 +47,7 @@ export function AiCard({ entry, focused = false, onJump, onDelete, onRerun }: Ai
           {entry.exact}
         </blockquote>
       ) : null}
-      <div className="ai-output">{entry.output}</div>
+      <AiMarkdown text={entry.output} resolveWiki={resolveWiki} onNavigateWiki={onNavigateWiki} />
       {entry.sources.length > 0 && (
         <div className="ai-sources">
           {entry.sources.map((source, index) => (

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { AiEntry } from '../types.ts';
 import { FloatCard } from './FloatCard.tsx';
+import { AiMarkdown } from './AiMarkdown.tsx';
 import { kindLabel } from './AiCard.tsx';
 import { Icon } from './Icons.tsx';
 
@@ -19,6 +20,8 @@ interface AiFloatCardProps {
   onRerun: () => void;
   onDelete: () => void;
   onOpenPanel: () => void;
+  resolveWiki?: (target: string, anchor?: string) => { href: string } | null;
+  onNavigateWiki?: (href: string, anchor: string | null) => void;
 }
 
 /**
@@ -40,6 +43,8 @@ export function AiFloatCard({
   onRerun,
   onDelete,
   onOpenPanel,
+  resolveWiki,
+  onNavigateWiki,
 }: AiFloatCardProps) {
   const when = entry.created ? entry.created.slice(0, 16).replace('T', ' ') : '';
   return (
@@ -66,7 +71,7 @@ export function AiFloatCard({
       onMove={onMove}
     >
       {entry.exact ? <blockquote className="ai-quote">{entry.exact}</blockquote> : null}
-      <div className="ai-output">{entry.output}</div>
+      <AiMarkdown text={entry.output} resolveWiki={resolveWiki} onNavigateWiki={onNavigateWiki} />
       {entry.sources.length > 0 && (
         <div className="ai-sources">
           {entry.sources.map((source, index) => (
