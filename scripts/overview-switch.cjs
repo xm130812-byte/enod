@@ -1,0 +1,21 @@
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+(async () => {
+  const b = await chromium.connectOverCDP(process.env.CDP_URL || 'http://127.0.0.1:9223');
+  const p = b.contexts()[0].pages().find((x) => x.url().includes('/tray.html'));
+  if (!p) throw new Error('overview not found');
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('.stats', { timeout: 15000 });
+  await p.bringToFront();
+  await p.fill('#wsPath', 'D:\\something\\tray-ws2');
+  await p.click('#openPath');
+  await p.waitForFunction(() => document.querySelector('#root').textContent.includes('tray-ws2'), { timeout: 15000 });
+  await p.waitForTimeout(800);
+  console.log('switched:', (await p.locator('#root').innerText()));
+  await p.screenshot({ path: '/mnt/d/something/md-reader/docs/screenshots/tray-overview-switch.png' });
+  await p.fill('#wsPath', 'D:\\something\\md-reader\\sample-library');
+  await p.click('#openPath');
+  await p.waitForFunction(() => document.querySelector('#root').textContent.includes('sample-library'), { timeout: 15000 });
+  await p.waitForTimeout(500);
+  console.log('restored:', (await p.locator('#root').innerText()));
+  await b.close();
+})();

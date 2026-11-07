@@ -22,6 +22,8 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};use tauri_plugin_dialog::DialogExt
 struct CoreProcess(Mutex<Option<Child>>);
 struct CoreUrl(Mutex<Option<String>>);
 struct QuitState(AtomicBool);
+#[allow(dead_code)]
+struct OverviewState(Mutex<Option<std::time::Instant>>);
 struct TrayModeItems {
     window: CheckMenuItem<Wry>,
     browser: CheckMenuItem<Wry>,
@@ -343,11 +345,13 @@ fn show_overview(app: &AppHandle) {
     };
     if let Some(window) = app.get_webview_window("overview") {
         position_overview(app, &window);
+        *app.state::<OverviewState>().0.lock().unwrap() = None;
         let _ = window.show();
         let _ = window.set_focus();
         return;
     }
     let parsed = url.parse().expect("overview url");
+    let nav_app = app.clone();
     let built = WebviewWindowBuilder::new(app, "overview", WebviewUrl::External(parsed))
         .title("md-reader 概览")
         .decorations(false)
@@ -356,11 +360,34 @@ fn show_overview(app: &AppHandle) {
         .resizable(false)
         .inner_size(360.0, 480.0)
         .visible(false)
+        .on_navigation(move |target| {
+            let path = target.path();
+            if path == "/__shell/open" {
+                open_main(&nav_app);
+                return false;
+            }
+            if let Some(id) = path.strip_prefix("/__shell/doc/") {
+                if let Some(base) = core_url(&nav_app) {
+                    let link = format!("{base}/#/doc/{id}");
+                    if let Some(window) = nav_app.get_webview_window("overview") {
+                        let _ = window.hide();
+                    }
+                    if prefs::load_open_mode() == OpenMode::Window {
+                        open_app_window(&nav_app, &link);
+                    } else {
+                        open_browser(&nav_app, &link);
+                    }
+                }
+                return false;
+            }
+            true
+        })
         .build();
     if let Ok(window) = built {
         let handle = window.clone();
         window.on_window_event(move |event| match event {
             WindowEvent::Focused(false) => {
+                *handle.state::<OverviewState>().0.lock().unwrap() = Some(std::time::Instant::now());
                 let _ = handle.hide();
             }
             WindowEvent::CloseRequested { api, .. } => {
@@ -370,6 +397,7 @@ fn show_overview(app: &AppHandle) {
             _ => {}
         });
         position_overview(app, &window);
+        *app.state::<OverviewState>().0.lock().unwrap() = None;
         let _ = window.show();
         let _ = window.set_focus();
     }
@@ -381,6 +409,14 @@ fn toggle_overview(app: &AppHandle) {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
             return;
+        }
+        // 点击托盘时窗口会先因失焦隐藏；350ms 内的“再次点击”视为收起，不重新弹出。
+        let hidden_at = *app.state::<OverviewState>().0.lock().unwrap();
+        if let Some(at) = hidden_at {
+            if at.elapsed() < Duration::from_millis(350) {
+                *app.state::<OverviewState>().0.lock().unwrap() = None;
+                return;
+            }
         }
     }
     show_overview(app);
@@ -489,6 +525,7 @@ fn main() {
         .manage(CoreProcess(Mutex::new(None)))
         .manage(CoreUrl(Mutex::new(None)))
         .manage(QuitState(AtomicBool::new(false)))
+        .manage(OverviewState(Mutex::new(None)))
         .on_window_event(|window, event| {
             if window.label() == "reader" {
                 if let WindowEvent::CloseRequested { api, .. } = event {
