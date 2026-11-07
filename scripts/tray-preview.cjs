@@ -4,7 +4,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
   const b = await chromium.connectOverCDP(process.env.CDP_URL || 'http://127.0.0.1:9222');
   const ctx = b.contexts()[0];
   const p = await ctx.newPage();
-  await p.setViewportSize({ width: 360, height: 480 });
+  await p.setViewportSize({ width: 360, height: 620 });
   await p.goto(url, { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('.stats', { timeout: 15000 });
   await p.waitForTimeout(1500);
