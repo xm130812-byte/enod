@@ -4,10 +4,10 @@ import type { Annotation } from '../types.ts';
 import { formatRelativeTime } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
 
-/** 浮框默认尺寸，也用作拖拽的起点。 */
-export const ANN_CARD_DEFAULT = { w: 380, h: 280 };
-export const ANN_CARD_MIN = { w: 280, h: 150 };
-export const ANN_CARD_MAX = { w: 720, h: 620 };
+/** 浮框默认尺寸：横向长方形，够放一段长备注。 */
+export const ANN_CARD_DEFAULT = { w: 560, h: 320 };
+export const ANN_CARD_MIN = { w: 320, h: 150 };
+export const ANN_CARD_MAX = { w: 820, h: 560 };
 
 interface AnnCardProps {
   annotation: Annotation;
