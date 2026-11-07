@@ -9,18 +9,20 @@ use prefs::OpenMode;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, RunEvent, Wry};
+use tauri::{AppHandle, Manager, RunEvent, WindowEvent, Wry};
 #[cfg(target_os = "windows")]
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 
 struct CoreProcess(Mutex<Option<Child>>);
 struct CoreUrl(Mutex<Option<String>>);
+struct QuitState(AtomicBool);
 struct TrayModeItems {
     window: CheckMenuItem<Wry>,
     browser: CheckMenuItem<Wry>,
@@ -210,6 +212,7 @@ fn open_url(url: &str) -> std::io::Result<()> {
 #[cfg(target_os = "windows")]
 fn open_app_window(app: &AppHandle, url: &str) {
     if let Some(window) = app.get_webview_window("reader") {
+        let _ = window.show();
         let _ = window.navigate(url.parse().expect("core url"));
         let _ = window.set_focus();
         return;
@@ -222,15 +225,17 @@ fn open_app_window(app: &AppHandle, url: &str) {
         .build();
 }
 
-fn open_main(app: &AppHandle) {
-    let url = app
-        .state::<CoreUrl>()
+fn core_url(app: &AppHandle) -> Option<String> {
+    app.state::<CoreUrl>()
         .0
         .lock()
         .unwrap()
         .clone()
-        .filter(|u| !u.ends_with(":0"));
-    let Some(url) = url else { return };
+        .filter(|u| !u.ends_with(":0"))
+}
+
+fn open_main(app: &AppHandle) {
+    let Some(url) = core_url(app) else { return };
     let _mode = prefs::load_open_mode();
     #[cfg(target_os = "windows")]
     {
@@ -249,6 +254,12 @@ fn stop_core(app: &AppHandle) {
     }
 }
 
+fn request_quit(app: &AppHandle) {
+    app.state::<QuitState>().0.store(true, Ordering::SeqCst);
+    stop_core(app);
+    app.exit(0);
+}
+
 fn set_mode(app: &AppHandle, mode: OpenMode) {
     if mode == OpenMode::Window && !cfg!(target_os = "windows") {
         return;
@@ -260,6 +271,24 @@ fn set_mode(app: &AppHandle, mode: OpenMode) {
     let items = app.state::<TrayModeItems>();
     let _ = items.window.set_checked(mode == OpenMode::Window);
     let _ = items.browser.set_checked(mode == OpenMode::Browser);
+    match mode {
+        OpenMode::Browser => {
+            if let Some(url) = core_url(app) {
+                open_browser(app, &url);
+            }
+            if let Some(window) = app.get_webview_window("reader") {
+                let _ = window.hide();
+            }
+        }
+        OpenMode::Window => {
+            if let Some(window) = app.get_webview_window("reader") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            } else {
+                open_main(app);
+            }
+        }
+    }
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -312,10 +341,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                     manager.enable()
                 };
             }
-            "quit" => {
-                stop_core(app);
-                app.exit(0);
-            }
+            "quit" => request_quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -344,6 +370,16 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(CoreProcess(Mutex::new(None)))
         .manage(CoreUrl(Mutex::new(None)))
+        .manage(QuitState(AtomicBool::new(false)))
+        .on_window_event(|window, event| {
+            if window.label() == "reader" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    // 关窗只隐藏到托盘；只有托盘“退出”才真正结束应用。
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             match spawn_core(&handle) {
@@ -365,9 +401,13 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building md-reader shell")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
-                stop_core(app);
+        .run(|app, event| match event {
+            RunEvent::ExitRequested { api, .. } => {
+                if !app.state::<QuitState>().0.load(Ordering::SeqCst) {
+                    api.prevent_exit();
+                }
             }
+            RunEvent::Exit => stop_core(app),
+            _ => {}
         });
 }
