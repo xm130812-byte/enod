@@ -1972,8 +1972,7 @@ body.col-resizing .panel-handle {
 }
 
 /* 右下角拖拽改大小 */
-.ann-card-resize {
-  position: absolute;
+.ann-card-resize {  position: absolute;
   right: 2px;
   bottom: 2px;
   width: 15px;

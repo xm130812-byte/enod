@@ -1267,6 +1267,14 @@ export function ReaderPage({
                   onAnnotationClick={jumpToAnnotation}
                   onAiClick={jumpToAiById}
                   onAiDelete={(entry) => void deleteAi(entry)}
+                  onAiRerun={(entry) =>
+                    void enqueueAi(entry.kind as AiKind, {
+                      exact: entry.exact,
+                      prefix: entry.prefix,
+                      suffix: entry.suffix,
+                      pos: entry.pos,
+                    })
+                  }
                   onToc={(items) => {
                     setToc(items);
                     onTocChangeRef.current?.(items);

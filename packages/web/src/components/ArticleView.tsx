@@ -15,7 +15,7 @@ import { highlightCodeBlocks } from '../lib/highlight.ts';
 import { api } from '../api.ts';
 import type { TocItem } from './Toc.tsx';
 import { AnnCard, ANN_CARD_DEFAULT, ANN_CARD_MAX, ANN_CARD_MIN } from './AnnCard.tsx';
-import { AiPopover } from './AiPopover.tsx';
+import { AiFloatCard } from './AiFloatCard.tsx';
 
 export interface ArticleHandle {
   flash: (annotationId: string) => void;
@@ -32,6 +32,7 @@ interface ArticleViewProps {
   onAnnotationClick: (id: string) => void;
   onAiClick: (id: string) => void;
   onAiDelete: (entry: AiEntry) => void;
+  onAiRerun: (entry: AiEntry) => void;
   onToc: (items: TocItem[]) => void;
   onAnchors: (payload: { resolved: ResolvedAnchor[]; orphaned: string[]; aiOrphaned: string[] }) => void;
   onImage: (src: string, alt: string) => void;
@@ -117,10 +118,14 @@ function readToc(root: HTMLElement): TocItem[] {
 
 const CARD_SIZE_KEY = 'mr.annCard.sizes';
 
-/** 最多同时钉住 3 个浮框。 */
+/** 最多同时钉住 3 个浮框（批注和 AI 共用一个额度）。 */
 const MAX_PINNED = 3;
 
-interface AnnCardState {
+/** 一块浮框：批注（ann）和 AI 产出（ai）走同一套状态机。 */
+interface FloatCardState {
+  /** `${kind}:${id}`，批注和 AI 的 id 空间可能重叠，必须区分 */
+  key: string;
+  kind: 'ann' | 'ai';
   id: string;
   x: number;
   y: number;
@@ -162,19 +167,16 @@ function persistCardSize(id: string, size: { w: number; h: number }): void {
 }
 
 export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function ArticleView(props, ref) {
-  const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onAiClick, onAiDelete, onToc, onAnchors, onImage } = props;
+  const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onAiClick, onAiDelete, onAiRerun, onToc, onAnchors, onImage } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ left: number; top: number; title: string; text: string } | null>(null);
-  /** 正文里的 AI 锚点浮层：一次只开一个，不拖不钉 */
-  const [aiPop, setAiPop] = useState<{ id: string; left: number; top: number } | null>(null);
-  /** 浮框：同时最多 1 个悬浮卡（pinned=false）+ 3 个钉住的卡；坐标是视口坐标 */
-  const [cards, setCards] = useState<AnnCardState[]>([]);
-  /** 每张卡记住自己的尺寸（批注 id → 尺寸） */
+  /** 浮框：批注和 AI 共用一套（同一套拖/钉/改大小）；坐标是视口坐标 */
+  const [cards, setCards] = useState<FloatCardState[]>([]);
+  /** 每张卡记住自己的尺寸（`ann:id` / `ai:id` → 尺寸） */
   const sizesRef = useRef<Record<string, { w: number; h: number }>>(readCardSizes());
   const hoverTimer = useRef<number | null>(null);
   const annTimer = useRef<number | null>(null);
   const aiTimer = useRef<number | null>(null);
-  const aiCloseTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const propsRef = useRef({
     doc,
@@ -184,27 +186,29 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     onAnnotationClick,
     onAiClick,
     onAiDelete,
+    onAiRerun,
     onToc,
     onAnchors,
     onImage,
   });
-  propsRef.current = { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onAiClick, onAiDelete, onToc, onAnchors, onImage };
+  propsRef.current = { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onAiClick, onAiDelete, onAiRerun, onToc, onAnchors, onImage };
 
-  /** 打开悬浮卡：贴在高亮旁边，下方放不下就翻到上方。 */
-  const openHover = useCallback((id: string, rect: DOMRect) => {
-    const size = sizesRef.current[id] ?? ANN_CARD_DEFAULT;
+  /** 打开悬浮卡：贴在高亮/✦ 旁边，下方放不下就翻到上方。批注与 AI 共用。 */
+  const openHover = useCallback((kind: 'ann' | 'ai', id: string, rect: DOMRect) => {
+    const key = `${kind}:${id}`;
+    const size = sizesRef.current[key] ?? ANN_CARD_DEFAULT;
     const height = Math.min(size.h, window.innerHeight - 60);
     const x = Math.max(12, Math.min(rect.left, window.innerWidth - size.w - 12));
     const below = rect.bottom + 10;
     const y = below + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 10) : below;
     // 悬浮卡永远只有一个；钉住的原地保留
     setCards((prev) => [
-      ...prev.filter((card) => card.pinned || card.id === id),
-      { id, x, y, pinned: false, w: size.w, h: size.h },
+      ...prev.filter((card) => card.pinned || card.key === key),
+      { key, kind, id, x, y, pinned: false, w: size.w, h: size.h },
     ]);
   }, []);
 
-  /** 延后关闭：给鼠标从高亮移到浮框留出时间，移进浮框时会被取消。 */
+  /** 延后关闭：给鼠标从高亮/✦ 移到浮框留出时间，移进浮框时会被取消。 */
   const cancelClose = useCallback(() => {
     if (closeTimer.current !== null) {
       window.clearTimeout(closeTimer.current);
@@ -220,51 +224,43 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     }, 220);
   }, []);
 
-  /** 钉住：位置就地保留（不搬家），最多 3 个，超了丢最早钉的那个。 */
-  const pinCard = useCallback((id: string) => {
+  /** 钉住：位置就地保留（不搬家），最多 3 个（批注 + AI 合计），超了丢最早钉的那个。 */
+  const pinCard = useCallback((key: string) => {
     setCards((prev) => {
-      const next = prev.map((card) => (card.id === id ? { ...card, pinned: true } : card));
+      const next = prev.map((card) => (card.key === key ? { ...card, pinned: true } : card));
       const pinned = next.filter((card) => card.pinned);
       if (pinned.length <= MAX_PINNED) return next;
-      const drop = new Set(pinned.slice(0, pinned.length - MAX_PINNED).map((card) => card.id));
-      return next.filter((card) => !drop.has(card.id));
+      const drop = new Set(pinned.slice(0, pinned.length - MAX_PINNED).map((card) => card.key));
+      return next.filter((card) => !drop.has(card.key));
     });
     cancelClose();
   }, [cancelClose]);
 
-  const closeCard = useCallback((id: string) => {
-    setCards((prev) => prev.filter((card) => card.id !== id));
+  /** 钉住按钮：没钉就钉，已钉就关掉（和批注原来的手感一致）。 */
+  const togglePin = useCallback(
+    (card: FloatCardState) => {
+      if (card.pinned) {
+        setCards((prev) => prev.filter((item) => item.key !== card.key));
+      } else {
+        pinCard(card.key);
+      }
+    },
+    [pinCard],
+  );
+
+  const closeCard = useCallback((key: string) => {
+    setCards((prev) => prev.filter((card) => card.key !== key));
   }, []);
 
-  /** 打开 AI 锚点浮层；位置贴着 ✦，下方放不下就翻到上方。 */
-  const openAiPop = useCallback((id: string, rect: DOMRect) => {
-    const width = 430;
-    const height = 300;
-    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
-    const below = rect.bottom + 8;
-    const top = below + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 8) : below;
-    setAiPop({ id, left, top });
+  const moveCard = useCallback((key: string, x: number, y: number) => {
+    setCards((prev) => prev.map((card) => (card.key === key ? { ...card, x, y } : card)));
   }, []);
 
-  const cancelAiClose = useCallback(() => {
-    if (aiCloseTimer.current !== null) {
-      window.clearTimeout(aiCloseTimer.current);
-      aiCloseTimer.current = null;
-    }
-  }, []);
-
-  const scheduleAiClose = useCallback(() => {
-    if (aiCloseTimer.current !== null) window.clearTimeout(aiCloseTimer.current);
-    aiCloseTimer.current = window.setTimeout(() => setAiPop(null), 200);
-  }, []);  const moveCard = useCallback((id: string, x: number, y: number) => {
-    setCards((prev) => prev.map((card) => (card.id === id ? { ...card, x, y } : card)));
-  }, []);
-
-  /** 每张卡自己的尺寸，拖动后记住（按批注 id 存）。 */
-  const resizeCard = useCallback((id: string, size: { w: number; h: number }) => {
-    sizesRef.current[id] = size;
-    persistCardSize(id, size);
-    setCards((prev) => prev.map((card) => (card.id === id ? { ...card, w: size.w, h: size.h } : card)));
+  /** 每张卡自己的尺寸，拖动后记住（按 `kind:id` 存）。 */
+  const resizeCard = useCallback((key: string, size: { w: number; h: number }) => {
+    sizesRef.current[key] = size;
+    persistCardSize(key, size);
+    setCards((prev) => prev.map((card) => (card.key === key ? { ...card, w: size.w, h: size.h } : card)));
   }, []);
 
   const applyAnchors = useCallback(() => {
@@ -403,37 +399,17 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     return () => window.removeEventListener('keydown', onKey);
   }, [cards]);
 
-  // AI 浮层不钉，滚动正文或按 Esc 就收；浮层内部滚动不算
-  useEffect(() => {
-    if (!aiPop) return;
-    const onScroll = (event: Event) => {
-      const target = event.target as Element | null;
-      if (target && typeof target.closest === 'function' && target.closest('.ai-pop')) return;
-      setAiPop(null);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setAiPop(null);
-    };
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [aiPop]);
-
-  // 切文档 / 删批注后丢掉失效的卡
+  // 切文档 / 删批注 / 删 AI 产出后丢掉失效的卡（批注与 AI 共用一套）
   useEffect(() => {
     setCards((prev) => {
-      const next = prev.filter((card) => doc.annotations.some((item) => item.id === card.id));
+      const next = prev.filter((card) =>
+        card.kind === 'ann'
+          ? doc.annotations.some((item) => item.id === card.id)
+          : (doc.ai ?? []).some((item) => item.id === card.id),
+      );
       return next.length === prev.length ? prev : next;
     });
-  }, [doc.annotations]);
-
-  // AI 产出被删掉后，浮层也要跟着消失
-  useEffect(() => {
-    setAiPop((prev) => (prev && (doc.ai ?? []).some((item) => item.id === prev.id) ? prev : null));
-  }, [doc.ai]);
+  }, [doc.annotations, doc.ai]);
 
   return (
     <>
@@ -443,11 +419,11 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         onMouseOver={(event) => {
           const chip = (event.target as HTMLElement).closest<HTMLElement>('.ai-chip');
           if (chip?.dataset.aiId) {
-            cancelAiClose();
+            cancelClose();
             if (aiTimer.current !== null) window.clearTimeout(aiTimer.current);
             const id = chip.dataset.aiId;
             const rect = chip.getBoundingClientRect();
-            aiTimer.current = window.setTimeout(() => openAiPop(id, rect), 100);
+            aiTimer.current = window.setTimeout(() => openHover('ai', id, rect), 120);
             return;
           }
           const mark = (event.target as HTMLElement).closest<HTMLElement>('mark.ann');
@@ -456,7 +432,7 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
             if (annTimer.current !== null) window.clearTimeout(annTimer.current);
             const id = mark.dataset.annId;
             const rect = mark.getBoundingClientRect();
-            annTimer.current = window.setTimeout(() => openHover(id, rect), 120);
+            annTimer.current = window.setTimeout(() => openHover('ann', id, rect), 120);
             return;
           }
           const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a.wiki-link');
@@ -486,11 +462,14 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         onMouseOut={(event) => {
           const chip = (event.target as HTMLElement).closest<HTMLElement>('.ai-chip');
           if (chip) {
-            if (aiTimer.current !== null) {
-              window.clearTimeout(aiTimer.current);
-              aiTimer.current = null;
+            const to = event.relatedTarget as HTMLElement | null;
+            if (!to || !chip.contains(to)) {
+              if (aiTimer.current !== null) {
+                window.clearTimeout(aiTimer.current);
+                aiTimer.current = null;
+              }
+              scheduleClose();
             }
-            scheduleAiClose();
           }
           const mark = (event.target as HTMLElement).closest<HTMLElement>('mark.ann');
           if (mark) {
@@ -517,7 +496,6 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         const chip = target.closest<HTMLElement>('.ai-chip');
         if (chip?.dataset.aiId) {
           event.stopPropagation();
-          setAiPop(null);
           propsRef.current.onAiClick(chip.dataset.aiId);
           return;
         }
@@ -551,51 +529,56 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         }}
       />
       {cards.map((card) => {
-        const annotation = doc.annotations.find((item) => item.id === card.id);
-        if (!annotation) return null;
+        const style = {
+          left: card.x,
+          top: card.y,
+          width: card.w,
+          ...(card.pinned ? { height: card.h } : { maxHeight: card.h }),
+        };
+        if (card.kind === 'ann') {
+          const annotation = doc.annotations.find((item) => item.id === card.id);
+          if (!annotation) return null;
+          return (
+            <AnnCard
+              key={card.key}
+              annotation={annotation}
+              pinned={card.pinned}
+              style={style}
+              onEnter={cancelClose}
+              onLeave={scheduleClose}
+              onPin={() => togglePin(card)}
+              onClose={() => closeCard(card.key)}
+              // 拖动即钉住：否则鼠标一离开卡片就没了
+              onDragStart={() => pinCard(card.key)}
+              onMove={(x, y) => moveCard(card.key, x, y)}
+              onResize={(size) => resizeCard(card.key, size)}
+            />
+          );
+        }
+        const entry = (doc.ai ?? []).find((item) => item.id === card.id);
+        if (!entry) return null;
         return (
-          <AnnCard
-            key={card.id}
-            annotation={annotation}
+          <AiFloatCard
+            key={card.key}
+            entry={entry}
             pinned={card.pinned}
-            style={{
-              left: card.x,
-              top: card.y,
-              width: card.w,
-              ...(card.pinned ? { height: card.h } : { maxHeight: card.h }),
-            }}
+            style={style}
             onEnter={cancelClose}
             onLeave={scheduleClose}
-            onPin={() => (card.pinned ? closeCard(card.id) : pinCard(card.id))}
-            onClose={() => closeCard(card.id)}
-            // 拖动即钉住：否则鼠标一离开卡片就没了
-            onDragStart={() => pinCard(card.id)}
-            onMove={(x, y) => moveCard(card.id, x, y)}
-            onResize={(size) => resizeCard(card.id, size)}
+            onPin={() => togglePin(card)}
+            onClose={() => closeCard(card.key)}
+            onDragStart={() => pinCard(card.key)}
+            onMove={(x, y) => moveCard(card.key, x, y)}
+            onResize={(size) => resizeCard(card.key, size)}
+            onJump={() => {
+              if (containerRef.current) flashAi(containerRef.current, entry.id);
+            }}
+            onRerun={() => propsRef.current.onAiRerun(entry)}
+            onDelete={() => propsRef.current.onAiDelete(entry)}
+            onOpenPanel={() => propsRef.current.onAiClick(entry.id)}
           />
         );
       })}
-      {aiPop && (() => {
-        const entry = (doc.ai ?? []).find((item) => item.id === aiPop.id);
-        if (!entry) return null;
-        return (
-          <AiPopover
-            entry={entry}
-            left={aiPop.left}
-            top={aiPop.top}
-            onEnter={cancelAiClose}
-            onLeave={scheduleAiClose}
-            onOpenPanel={() => {
-              setAiPop(null);
-              propsRef.current.onAiClick(entry.id);
-            }}
-            onDelete={() => {
-              setAiPop(null);
-              propsRef.current.onAiDelete(entry);
-            }}
-          />
-        );
-      })()}
       {preview && (
         <div
           className="wiki-preview"

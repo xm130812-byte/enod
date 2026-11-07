@@ -2382,28 +2382,31 @@ mark.find-hit.active {
   }
 }
 
-/* AI 浮层：比批注浮框轻，不拖不钉 */
-.ai-pop {
-  position: fixed;
-  z-index: 140;
+/* AI 浮框：和批注浮框共用外壳（可拖、可钉、可改大小），只换内容与配色 */
+.ai-card .ann-card-head {
+  background: color-mix(in oklab, var(--accent) 6%, var(--bg-side));
+}
+.ai-card .ann-card-body {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg-elev);
-  box-shadow: var(--shadow-md);
-  overflow-y: auto;
-  animation: palette-in 120ms var(--ease-out);
+  gap: 8px;
 }
-.ai-pop .ai-output {
+.ai-card .ai-output {
   max-height: none;
   overflow: visible;
 }
+.ai-card .ai-quote {
+  -webkit-line-clamp: 3;
+}
+.ai-card .ai-foot {
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line-soft);
+}
 
 /* 提问框 */
-.ai-ask {  display: flex;
+.ai-ask {
+  display: flex;
   align-items: stretch;
   gap: 6px;
   margin: 0 0 4px;
