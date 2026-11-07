@@ -28,6 +28,17 @@ struct TrayModeItems {
     browser: CheckMenuItem<Wry>,
 }
 
+fn debug_log(msg: &str) {
+    if std::env::var("MD_READER_SHELL_DEBUG").is_err() {
+        return;
+    }
+    use std::io::Write;
+    let path = std::env::temp_dir().join("md-reader-shell.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{msg}");
+    }
+}
+
 fn core_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -211,12 +222,19 @@ fn open_url(url: &str) -> std::io::Result<()> {
 
 #[cfg(target_os = "windows")]
 fn open_app_window(app: &AppHandle, url: &str) {
+    debug_log("open_app_window");
     if let Some(window) = app.get_webview_window("reader") {
-        let _ = window.show();
+        debug_log("open_app_window: existing");
+        let unmin = window.unminimize();
+        let shown = window.show();
+        let focused = window.set_focus();
+        debug_log(&format!(
+            "open_app_window: unminimize={unmin:?} show={shown:?} focus={focused:?}"
+        ));
         let _ = window.navigate(url.parse().expect("core url"));
-        let _ = window.set_focus();
         return;
     }
+    debug_log("open_app_window: create");
     let parsed = url.parse().expect("core url");
     let _ = WebviewWindowBuilder::new(app, "reader", WebviewUrl::External(parsed))
         .title("md-reader")
@@ -237,6 +255,7 @@ fn core_url(app: &AppHandle) -> Option<String> {
 fn open_main(app: &AppHandle) {
     let Some(url) = core_url(app) else { return };
     let _mode = prefs::load_open_mode();
+    debug_log(&format!("open_main mode={_mode:?} url={url}"));
     #[cfg(target_os = "windows")]
     {
         if _mode == OpenMode::Window {
@@ -361,6 +380,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            debug_log("single-instance callback");
             open_main(app);
         }))
         .plugin(tauri_plugin_autostart::init(
@@ -376,6 +396,7 @@ fn main() {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     // 关窗只隐藏到托盘；只有托盘“退出”才真正结束应用。
                     api.prevent_close();
+                    debug_log("close requested: hide");
                     let _ = window.hide();
                 }
             }
