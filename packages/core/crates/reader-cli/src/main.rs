@@ -219,8 +219,11 @@ fn resolve_web_dist() -> Option<PathBuf> {
 fn open_browser(url: &str) {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let _ = std::process::Command::new("cmd")
             .args(["/C", "start", "", url])
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn();
     }
     #[cfg(target_os = "macos")]

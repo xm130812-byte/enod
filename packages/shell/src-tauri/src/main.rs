@@ -64,7 +64,8 @@ fn spawn_core(app: &AppHandle) -> Result<String, String> {
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        command.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
     }
     let mut child = command
         .stdout(Stdio::piped())
@@ -188,8 +189,11 @@ fn open_browser(app: &AppHandle, url: &str) {
 fn open_url(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         Command::new("cmd")
             .args(["/C", "start", "", url])
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map(|_| ())
     }

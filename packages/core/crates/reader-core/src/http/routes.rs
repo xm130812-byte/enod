@@ -258,9 +258,14 @@ pub async fn doc_open(State(state): State<AppState>, Path(id): Path<String>) -> 
     let abs = state.service.doc_abs(&row)?;
     let path = abs.to_string_lossy().to_string();
     #[cfg(target_os = "windows")]
-    let spawned = std::process::Command::new("cmd")
-        .args(["/C", "start", "", &path])
-        .spawn();
+    let spawned = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", "", &path])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
     #[cfg(target_os = "macos")]
     let spawned = std::process::Command::new("open").arg(&path).spawn();
     #[cfg(all(unix, not(target_os = "macos")))]

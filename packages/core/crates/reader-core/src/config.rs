@@ -318,9 +318,12 @@ pub fn pid_alive(pid: u32) -> bool {
     }
     #[cfg(windows)]
     {
-        let out = std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-            .output();
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut cmd = std::process::Command::new("tasklist");
+        cmd.args(["/FI", &format!("PID eq {pid}"), "/NH"])
+            .creation_flags(CREATE_NO_WINDOW);
+        let out = cmd.output();
         out.map(|o| {
             let s = String::from_utf8_lossy(&o.stdout);
             s.contains(&pid.to_string()) && !s.contains("No tasks")

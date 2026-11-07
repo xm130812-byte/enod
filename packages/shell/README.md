@@ -4,11 +4,14 @@
 
 ## 形态
 
-| 平台 | 界面 | 说明 |
+| 平台 | 默认界面 | 可切换 |
 |---|---|---|
-| Windows | 内嵌 WebView2 | `WebviewWindowBuilder`，零内核差异 |
-| macOS | 调 Chrome | 不内嵌 WKWebView；找不到时提示安装 |
-| Linux | 调 Chrome / Chromium | 不内嵌 WebKitGTK；按 PATH 探测 |
+| Windows | 内嵌 WebView2 | Chrome 标签页 |
+| macOS | Chrome 标签页 | — |
+| Linux | Chrome / Chromium 标签页 | — |
+
+打开方式存在 core `config.json` 的 `shell.openMode`（`window` / `browser`）；Windows 缺省
+`window`，macOS/Linux 缺省 `browser`。托盘右键可随时切换并持久化。
 
 ## 构建前置
 
@@ -17,16 +20,7 @@
 - **Linux**：`gtk3`、`webkit2gtk-4.1`、`libappindicator` 的开发包。
   这些是 **Tauri 壳本身的编译依赖**，不是界面内核；界面仍只承诺 Chromium。
 
-本机（WSL Arch，无 root）实测：
-
-```
-pkg-config --libs --cflags gdk-3.0
-→ Package 'gdk-3.0' was not found
-cargo check → rc=101
-```
-
-Windows 侧账号非管理员、缺 MSVC；macOS 无机器。因此安装包尚未产出（详见
-`docs/V4-STATUS.md` §5）。
+WSL 无 root 时可用 `scripts/sysroot.py` 建 rootless sysroot；本机已用这套方式编译通过。
 
 ## 构建步骤
 
@@ -55,12 +49,15 @@ CI 已配置 `.github/workflows/v4-build.yml`：三平台 runner 上装依赖 �
 
 ## 行为
 
-- 启动：拉起内核（`--no-open`），从 stdout 解析 `http://127.0.0.1:<port>`，再开界面。
-- 单实例：第二次启动只唤起已有窗口/标签页。
-- 托盘：打开书库 / 重新打开界面 / 开机自启 / 退出；退出时 kill 内核。
-- 找不到 Chrome/Chromium：一次性说明 + 打开下载页，不降级 WebKit。
+- 启动：拉起内核（`--no-open`，Windows 用 `CREATE_NO_WINDOW` 隐藏黑框），从 stdout 解析
+  `http://127.0.0.1:<port>`，再按默认打开方式开界面。
+- 托盘：打开界面 / 默认打开方式（应用窗口、Chrome 标签页）/ 开机自启 / 退出；退出时 kill 内核。
+- 左键托盘：按当前默认方式打开。
+- 单实例：第二次启动按默认方式唤起窗口或标签页。
+- 浏览器模式用 `--new-tab <url>`；找不到 Chrome/Chromium 时退回默认浏览器。
 
-## 未验证
+## 验证状态
 
-`main.rs` 按 Tauri v2 API 编写，但本机无法编译（缺 gdk-3.0 / MSVC）；
-首次在 CI 上构建时可能需要按实际 `tauri` 小版本微调 menu/tray API。
+- Linux：`cargo check` 通过；deb 构建通过；`scripts/shell-smoke.sh` 验证
+  `--new-tab http://127.0.0.1:…` + health 200。
+- Windows：CI 出 NSIS；待装包验证无黑框与两种打开方式切换。
