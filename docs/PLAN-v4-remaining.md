@@ -60,6 +60,9 @@ Tray Icon（常驻）
   - CI run `42321928581`，NSIS 7,132,563 B；core/tasklist/cmd 均无 conhost（19→19）
   - 应用窗口：标题 `md-reader`，WebView2 CDP 9223，UI 正常
   - 浏览器模式：写 `shell.openMode=browser` 后只开 Chrome 标签，无应用窗口
+- [x] 关窗行为：WM_CLOSE → `CloseRequested` 只 hide，shell/core 均存活；二次启动
+      `open_main` 能重新 show 同一窗口（debug bundle 实测，日志 `%TEMP%\md-reader-shell.log`）
+- [ ] 打包：等确认后再跑 `v4-build`；当前只出 windows-debug 裸程序
 
 **验收**：双击快捷方式只出现应用窗口；托盘右键可切换默认方式；重启后仍生效；浏览器模式出现 Chrome 标签。
 
@@ -131,4 +134,6 @@ bash scripts/backup.sh
 
 - 2026-11-07：建立 WSL 主副本；4 项准备完成；开始 P0。
 - 2026-11-07：P0 代码完成（Linux 编译通过，shell 冒烟 `--new-tab` + health 200）。
-- 2026-11-07：P0 Windows 装包验收：无黑框、应用窗口/浏览器两种模式均打开；待 P1 概览。
+- 2026-11-07：P0 Windows 装包验收：无黑框、应用窗口/浏览器两种模式均打开。
+- 2026-11-07：修复关窗退出问题（hide 到托盘 + prevent_exit），debug bundle 实测关窗后
+  shell/core 存活、二次启动恢复窗口；打包已暂停，等确认。
