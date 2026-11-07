@@ -237,7 +237,7 @@ md-reader/
 │  ├─ src/components/                # 书架、阅读器、面板、弹层、搜索、设置
 │  ├─ src/editor/                    # CodeMirror 6 + Live Preview 装饰
 │  └─ src/lib/                       # markdown-it 管线、批注重锚定、Shiki、文内查找
-├─ sample-library/                   # 演示书库（含批注/双链/公式/图）
+├─ sample-library/                   # 转换金标准夹具（docx/html/sql/txt），不是书库
 ├─ scripts/                          # 构建、打包、契约、召回、e2e、截图、同步
 └─ docs/                             # V4-STATUS / TRACK / PACKAGING / UI-DESIGN / TRAY-DESIGN
 ```
