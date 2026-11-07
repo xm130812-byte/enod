@@ -22,7 +22,8 @@ Thumbs.db
 # vendored tools (UPX 等，按需 pnpm upx:fetch 下载)
 tools/
 
-sample-library/temp/
+sample-library/temp/*
+!sample-library/temp/README.txt
 
 # v4 release artifacts
 release/
