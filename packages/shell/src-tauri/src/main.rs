@@ -603,7 +603,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         window: window_item,
         browser: browser_item,
     });
-    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-64.png"))?;
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
     TrayIconBuilder::new()
         .icon(tray_icon)
         .tooltip(format!(
