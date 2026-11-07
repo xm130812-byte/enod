@@ -2,7 +2,8 @@
 # 在无 root 的 WSL 里跑 Tauri Linux 壳：Broadway 后端 + 假 Chrome，验证 core 拉起与 --app 调用。
 set -uo pipefail
 SYS="$HOME/gtk-sysroot"
-DEB=/mnt/d/something/md-reader/release/md-reader_0.1.0_amd64.deb
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+DEB="$ROOT/release/md-reader_0.1.0_amd64.deb"
 ROOT=/tmp/shell-deb
 HOME_DIR=/tmp/shell-home
 rm -rf "$ROOT" "$HOME_DIR" /tmp/fakebin /tmp/fake-chrome.log /tmp/shell.log /tmp/runtime-md

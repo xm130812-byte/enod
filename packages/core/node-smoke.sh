@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # 冒烟：起 Node 内核，确认契约基线可跑。
 set -uo pipefail
-cd /mnt/d/something/md-reader
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$ROOT"
 DATA=/tmp/mdreader-node-smoke
 rm -rf "$DATA"; mkdir -p "$DATA"
-READER_ROOT=/mnt/d/something/md-reader/sample-library \
+READER_ROOT="$ROOT/sample-library" \
 READER_NO_OPEN=1 \
 node packages/server/src/index.ts --data-dir "$DATA" --port 0 >/tmp/mdreader-node.log 2>&1 &
 PID=$!

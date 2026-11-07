@@ -1,0 +1,129 @@
+# md-reader v4 · 后续实施计划手册
+
+> 状态：WSL 主副本已建立；本手册记录环境、已完成准备项、托盘/打开方式的分阶段实现与验收。
+> 主副本：`/home/xm130812/md-reader`（ext4）  
+> Windows 镜像：`D:\something\md-reader`（只 pull，不直接改；安装/交付暂存）
+
+## 0. 环境与同步协议
+
+| 项 | 约定 |
+|---|---|
+| 开发/构建/测试 | WSL `/home/xm130812/md-reader` |
+| Windows 镜像 | `D:\something\md-reader`，仅 `git pull --ff-only` |
+| 远端 | `https://github.com/xm130812-byte/enod`，分支 `main` |
+| 产物 | Linux 在 WSL `release/`；Win/mac 从 GitHub Actions 下载到 D: |
+| 备份 | `bash scripts/backup.sh` → bundle + 未提交 patch + release |
+| 编辑 | 优先 VS Code Remote WSL；不要从 Windows 侧改源码 |
+
+已完成：WSL 副本、`pnpm install`（硬链接，1.3s）、web build（1.85s）、Rust 测试 + golden 全绿。
+
+## 1. 准备项（4 件，已完成/待提交）
+
+- [x] 脚本去 `/mnt/d` 硬编码：`packages/core/smoke.sh`、`node-smoke.sh`、`scripts/shell-smoke.sh`、`scripts/webview-check.cjs`
+- [x] `.gitattributes`：统一 LF，图片二进制，`sample-library/** -text` 保字节
+- [x] `scripts/backup.sh`：git bundle + 未提交 diff + release
+- [x] 同步协议写入本手册；D: 只 pull
+- [ ] 修正 `sample-library/temp/README.txt` 的 100755 → 100644
+
+## 2. 目标形态
+
+```
+Tray Icon（常驻）
+  ├─ 左键：window 模式开/聚焦应用窗口；browser 模式开 Chrome 标签
+  ├─ 右键：打开 / 默认打开方式 / 退出
+  └─ tooltip：md-reader · N 篇 · 索引状态
+
+打开方式
+  ├─ 应用窗口（仅 Windows，WebView2）
+  └─ Chrome 标签页（三平台）
+```
+
+详细视觉/交互见 [TRAY-DESIGN-v1.md](./TRAY-DESIGN-v1.md)。
+
+## 3. 分阶段
+
+### P0 基础：去黑框 + 打开方式 + 托盘菜单
+
+- [ ] Windows spawn core 使用 `CREATE_NO_WINDOW`（0x08000000），保留 stdout 端口解析
+- [ ] `shell.openMode` 存 core `config.json` 扩展字段；缺省 Windows=window，其他=browser
+- [ ] 托盘菜单：
+  - 打开界面
+  - 默认：应用窗口（仅 Windows）
+  - 默认：Chrome 标签页
+  - 退出
+- [ ] 左键托盘：按当前模式打开
+- [ ] Chrome 探测加 Windows 路径（Program Files / LOCALAPPDATA）
+- [ ] browser 模式用 `--new-tab <url>`，不再用 `--app`
+- [ ] 单实例回调按默认模式打开
+- [ ] Linux `cargo check` + deb 构建 + shell 冒烟（假 Chrome 收到 `--new-tab`）
+- [ ] Windows CI 装包验证：无黑框、菜单可用、两种模式切换持久化
+
+**验收**：双击快捷方式只出现应用窗口；托盘右键可切换默认方式；重启后仍生效；浏览器模式出现 Chrome 标签。
+
+### P1 概览（Windows）
+
+- [ ] 360×480 无边框 WebView2 弹层，贴托盘、失焦隐藏
+- [ ] 统计 / 索引状态 / 最近 5 篇 / 当前工作区 / 打开方式
+- [ ] 工作区切换（`POST /library/open`）+ `library-changed` 刷新
+- [ ] SSE `/api/v1/events` 实时更新，5s 轮询兜底
+- [ ] 快捷动作：打开、搜索、新建、重新索引、设置、退出
+- [ ] 左键开概览，双击开主界面
+
+### P2 macOS/Linux 概览
+
+- [ ] 方案 A：原生菜单摘要（推荐，不碰 WebKit）
+- [ ] 或方案 B：egui 原生小窗（若确认要一致体验）
+
+### P3 设置与打磨
+
+- [ ] 设置页「启动与托盘」：默认打开方式、托盘概览开关
+- [ ] 本次覆盖（这次用 Chrome/窗口）不写默认
+- [ ] 托盘状态点（索引中/错误）
+- [ ] 多显示器/DPI 定位
+- [ ] 关窗口 = 隐藏到托盘；托盘退出才结束内核
+
+## 4. 配置约定
+
+```json
+{
+  "shell": {
+    "openMode": "window",
+    "trayOverview": true,
+    "recentWorkspaces": []
+  }
+}
+```
+
+- core 已保留未知键，`GET/PATCH /config` 可读写；
+- 缺省回退：Windows→window，macOS/Linux→browser；
+- 不新增 API 契约。
+
+## 5. 已知限制
+
+1. Chrome 没有可靠“聚焦已有标签”的跨平台 API；再次打开可能新开标签。
+2. macOS/Linux 没有「应用窗口」；富概览需选 A/B。
+3. Windows/macOS 安装包必须走 CI（本机无 MSVC/Mac）。
+4. WSL 副本是唯一开发主线；D: 只做镜像/验收。
+
+## 6. 回归命令
+
+```bash
+cd /home/xm130812/md-reader
+pnpm build
+cd packages/core && cargo test -p reader-core
+cd ../..
+node scripts/contract.mjs
+node scripts/edit-flow.mjs
+bash packages/core/smoke.sh
+bash packages/core/lan-smoke.sh
+# 壳
+bash scripts/tauri-linux-build.sh
+bash scripts/tauri-linux-bundle.sh --bundles deb
+bash scripts/shell-smoke.sh
+# 备份
+bash scripts/backup.sh
+```
+
+## 7. 状态日志
+
+- 2026-11-07：建立 WSL 主副本；4 项准备完成；开始 P0。

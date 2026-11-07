@@ -1,4 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const path = require('node:path');
 (async () => {
   const b = await chromium.connectOverCDP(process.env.CDP_URL || 'http://127.0.0.1:9223');
   const ctx = b.contexts()[0];
@@ -10,6 +11,6 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
   console.log('title:', title);
   console.log('body:', body.replace(/\n/g, ' | '));
   await p.setViewportSize({ width: 1280, height: 860 });
-  await p.screenshot({ path: '/mnt/d/something/md-reader/docs/screenshots/v4-windows-installed.png' });
+  await p.screenshot({ path: path.join(__dirname, '..', 'docs', 'screenshots', 'v4-windows-installed.png') });
   await b.close();
 })();

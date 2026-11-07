@@ -3,11 +3,12 @@
 set -uo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 cd "$(dirname "$0")"
+ROOT=$(cd ../.. && pwd)
 DATA=/tmp/mdreader-smoke
 BIN="${READER_BIN:-${CARGO_TARGET_DIR:-$HOME/target}/debug/md-reader-core}"
 rm -rf "$DATA"
 mkdir -p "$DATA"
-READER_ROOT=/mnt/d/something/md-reader/sample-library \
+READER_ROOT="$ROOT/sample-library" \
 READER_NO_OPEN=1 \
 "$BIN" --data-dir "$DATA" --port 0 >/tmp/mdreader-smoke.log 2>&1 &
 PID=$!
