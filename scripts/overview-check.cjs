@@ -10,6 +10,5 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
   await p.waitForTimeout(1200);
   console.log('size:', await p.evaluate(() => [innerWidth, innerHeight].join('x')));
   console.log('text:', ((await p.locator('body').innerText()) || '').replace(/\n/g, ' | ').slice(0, 400));
-  await p.screenshot({ path: '/mnt/d/something/md-reader/docs/screenshots/tray-overview-windows.png' });
-  await b.close();
+  await p.screenshot({ path: '/mnt/d/something/md-reader/docs/screenshots/tray-overview-windows.png' });  await b.close();
 })();

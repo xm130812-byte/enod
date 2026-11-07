@@ -331,10 +331,30 @@ fn position_overview(app: &AppHandle, window: &tauri::WebviewWindow) {
         let size = monitor.size();
         let pos = monitor.position();
         let w = (360.0 * scale) as i32;
-        let h = (480.0 * scale) as i32;
+        let h = (620.0 * scale) as i32;
         let x = pos.x + size.width as i32 - w - (12.0 * scale) as i32;
         let y = pos.y + size.height as i32 - h - (52.0 * scale) as i32;
         let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn open_with_query(app: &AppHandle, query: &str) {
+    let Some(base) = core_url(app) else {
+        return;
+    };
+    let link = format!("{base}/{}", query.trim_start_matches('/'));
+    if prefs::load_open_mode() == OpenMode::Window {
+        open_main(app);
+        if let Some(window) = app.get_webview_window("reader") {
+            let _ = window.navigate(link.parse().expect("query url"));
+            let _ = window.set_focus();
+        }
+    } else {
+        if let Some(window) = app.get_webview_window("overview") {
+            let _ = window.hide();
+        }
+        open_browser(app, &link);
     }
 }
 
@@ -358,12 +378,42 @@ fn show_overview(app: &AppHandle) {
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(false)
-        .inner_size(360.0, 480.0)
+        .inner_size(360.0, 620.0)
         .visible(false)
         .on_navigation(move |target| {
             let path = target.path();
             if path == "/__shell/open" {
                 open_main(&nav_app);
+                return false;
+            }
+            if let Some(mode) = path.strip_prefix("/__shell/mode/") {
+                match mode {
+                    "window" => set_mode(&nav_app, OpenMode::Window),
+                    "browser" => set_mode(&nav_app, OpenMode::Browser),
+                    _ => {}
+                }
+                return false;
+            }
+            if let Some(view) = path.strip_prefix("/__shell/view/") {
+                if view == "simple" || view == "complex" {
+                    open_with_query(&nav_app, &format!("?view={view}"));
+                }
+                return false;
+            }
+            if path == "/__shell/search" {
+                open_with_query(&nav_app, "?focus=search");
+                return false;
+            }
+            if path == "/__shell/new" {
+                open_with_query(&nav_app, "?new=1");
+                return false;
+            }
+            if path == "/__shell/settings" {
+                open_with_query(&nav_app, "?settings=1");
+                return false;
+            }
+            if path == "/__shell/quit" {
+                request_quit(&nav_app);
                 return false;
             }
             if let Some(id) = path.strip_prefix("/__shell/doc/") {
@@ -503,12 +553,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 let app = tray.app_handle();
                 #[cfg(target_os = "windows")]
                 {
-                    if prefs::load_open_mode() == OpenMode::Browser {
-                        toggle_overview(app);
-                        return;
-                    }
+                    toggle_overview(app);
+                    return;
                 }
-                open_main(app);
+                #[cfg(not(target_os = "windows"))]
+                {
+                    open_main(app);
+                }
             }
         })
         .build(app)?;

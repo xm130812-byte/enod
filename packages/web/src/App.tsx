@@ -97,6 +97,21 @@ function Shell() {
     }
   }, []);
 
+  // 托盘概览通过 ?view= / ?focus= / ?settings= / ?new= 唤起主界面
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get('view');
+    if (view === 'simple' || view === 'complex') switchMode(view);
+    if (params.get('focus') === 'search') setSearchOpen(true);
+    if (params.get('settings') === '1') setSettingsOpen(true);
+    if (params.get('new') === '1') setNewDocOpen(true);
+    if (['view', 'focus', 'settings', 'new'].some((k) => params.has(k))) {
+      const url = new URL(window.location.href);
+      for (const key of ['view', 'focus', 'settings', 'new']) url.searchParams.delete(key);
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  }, [switchMode]);
+
   useEffect(() => {
     if (swap !== 'active') return;
     const timer = window.setTimeout(() => setSwap('idle'), 320);
