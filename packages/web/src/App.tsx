@@ -265,7 +265,7 @@ function Shell() {
           <Icon name="alert" size={26} />
           <div>
             <strong>连接不上守护进程</strong>
-            <p>{error ?? '请确认 md-reader 正在运行。'}</p>
+            <p>{error ?? '请确认 enod 正在运行。'}</p>
           </div>
           <button className="btn btn-ghost" onClick={() => void refresh()}>
             重试

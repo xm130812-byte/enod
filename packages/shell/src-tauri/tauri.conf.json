@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "md-reader",
+  "productName": "enod",
   "version": "0.1.0",
-  "identifier": "app.mdreader.desktop",
+  "identifier": "app.enod.desktop",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",

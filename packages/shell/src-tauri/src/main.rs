@@ -253,7 +253,7 @@ fn open_app_window(app: &AppHandle, url: &str) {
     debug_log("open_app_window: create");
     let parsed: tauri::Url = url.parse().expect("core url");
     let built = WebviewWindowBuilder::new(app, "reader", WebviewUrl::External(parsed.clone()))
-        .title("md-reader")
+        .title("enod")
         .inner_size(1280.0, 860.0)
         .min_inner_size(880.0, 600.0)
         .build();
@@ -370,16 +370,22 @@ fn set_mode(app: &AppHandle, mode: OpenMode) {
         }
         OpenMode::Window => {
             #[cfg(target_os = "windows")]
-            if let Some(overview) = app.get_webview_window("overview") {
-                let _ = overview.hide();
-            }
-            if let Some(url) = core_url(app) {
-                if app.get_webview_window("reader").is_some() {
-                    open_app_window(app, &url);
+            {
+                if let Some(overview) = app.get_webview_window("overview") {
+                    let _ = overview.hide();
+                }
+                if let Some(url) = core_url(app) {
+                    if app.get_webview_window("reader").is_some() {
+                        open_app_window(app, &url);
+                    } else {
+                        open_main(app);
+                    }
                 } else {
                     open_main(app);
                 }
-            } else {
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
                 open_main(app);
             }
         }
@@ -440,7 +446,7 @@ fn show_overview(app: &AppHandle) {
     let parsed = url.parse().expect("overview url");
     let nav_app = app.clone();
     let built = WebviewWindowBuilder::new(app, "overview", WebviewUrl::External(parsed))
-        .title("md-reader 概览")
+        .title("enod 概览")
         .decorations(false)
         .always_on_top(true)
         .skip_taskbar(true)
@@ -597,9 +603,11 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         window: window_item,
         browser: browser_item,
     });
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-64.png"))?;
     TrayIconBuilder::new()
+        .icon(tray_icon)
         .tooltip(format!(
-            "md-reader · 默认打开方式：{}",
+            "enod · 默认打开方式：{}",
             prefs::load_open_mode().label()
         ))
         .menu(&menu)
@@ -683,7 +691,7 @@ fn main() {
                     handle
                         .dialog()
                         .message(err.clone())
-                        .title("md-reader 启动失败")
+                        .title("enod 启动失败")
                         .blocking_show();
                     return Err(err.into());
                 }

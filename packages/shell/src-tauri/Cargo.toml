@@ -2,13 +2,13 @@
 name = "md-reader-shell"
 version = "0.1.0"
 edition = "2021"
-description = "md-reader Tauri shell: tray / single instance / autostart / Chromium UI"
+description = "enod Tauri shell: tray / single instance / autostart / Chromium UI"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-dialog = "2"

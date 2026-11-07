@@ -314,7 +314,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         <section className="settings-section about">
           <h3>关于</h3>
           <p className="muted small">
-            md-reader 0.1.0 · 本地守护进程 + Chrome · 文件即数据库
+            enod 0.1.0 · 本地守护进程 + Chrome · 文件即数据库
             <br />
             应用数据目录与日志不进书库；书库只同步 .md 与 assets/。
           </p>

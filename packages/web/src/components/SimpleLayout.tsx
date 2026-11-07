@@ -269,7 +269,7 @@ export function SimpleLayout({
                 <Icon name="book" size={15} />
               </span>
               <div className="brand-text">
-                <strong>md-reader</strong>
+                <strong>enod</strong>
                 <span className="brand-sub">
                   一页 · {docs.length} 篇 · {formatWords(info?.stats.words ?? 0)}
                 </span>

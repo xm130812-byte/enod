@@ -156,3 +156,5 @@ bash scripts/backup.sh
 - 2026-11-07：修复「切应用窗口白屏/关不掉」：在 overview 的 on_navigation 回调里同步建
   WebView 窗会卡死 UI 线程；改为 defer 到主线程后创建。关窗改为真正销毁窗口，应用靠
   ExitRequested 留在托盘。
+- 2026-11-07：应用改名 enod（productName/identifier/窗口标题/tooltip/网页标题/侧栏品牌），
+  新增透明书本托盘图标 `icons/tray-64.png`。

@@ -207,7 +207,7 @@ export function ShelfPage({
             <Icon name="book" size={20} />
           </span>
           <div className="brand-text">
-            <strong>md-reader</strong>
+            <strong>enod</strong>
             <span className="brand-sub">
               万卷 · {info?.root ? basename(info.root) : '未挂载'} · {info?.stats.total ?? docs.length} 篇 ·{' '}
               {formatWords(info?.stats.words ?? 0)}
