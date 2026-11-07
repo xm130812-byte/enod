@@ -44,18 +44,18 @@ Tray Icon（常驻）
 
 ### P0 基础：去黑框 + 打开方式 + 托盘菜单
 
-- [ ] Windows spawn core 使用 `CREATE_NO_WINDOW`（0x08000000），保留 stdout 端口解析
-- [ ] `shell.openMode` 存 core `config.json` 扩展字段；缺省 Windows=window，其他=browser
-- [ ] 托盘菜单：
+- [x] Windows spawn core 使用 `CREATE_NO_WINDOW`（0x08000000），保留 stdout 端口解析
+- [x] `shell.openMode` 存 core `config.json` 扩展字段；缺省 Windows=window，其他=browser
+- [x] 托盘菜单：
   - 打开界面
   - 默认：应用窗口（仅 Windows）
   - 默认：Chrome 标签页
   - 退出
-- [ ] 左键托盘：按当前模式打开
-- [ ] Chrome 探测加 Windows 路径（Program Files / LOCALAPPDATA）
-- [ ] browser 模式用 `--new-tab <url>`，不再用 `--app`
-- [ ] 单实例回调按默认模式打开
-- [ ] Linux `cargo check` + deb 构建 + shell 冒烟（假 Chrome 收到 `--new-tab`）
+- [x] 左键托盘：按当前模式打开
+- [x] Chrome 探测加 Windows 路径（Program Files / LOCALAPPDATA）
+- [x] browser 模式用 `--new-tab <url>`，不再用 `--app`
+- [x] 单实例回调按默认模式打开
+- [x] Linux `cargo check` + deb 构建 + shell 冒烟（假 Chrome 收到 `--new-tab`）
 - [ ] Windows CI 装包验证：无黑框、菜单可用、两种模式切换持久化
 
 **验收**：双击快捷方式只出现应用窗口；托盘右键可切换默认方式；重启后仍生效；浏览器模式出现 Chrome 标签。
@@ -127,3 +127,4 @@ bash scripts/backup.sh
 ## 7. 状态日志
 
 - 2026-11-07：建立 WSL 主副本；4 项准备完成；开始 P0。
+- 2026-11-07：P0 代码完成（Linux 编译通过，shell 冒烟 `--new-tab` + health 200）；待 Windows CI 装包验收。

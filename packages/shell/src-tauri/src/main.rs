@@ -1,23 +1,30 @@
 //! md-reader Tauri 壳：拉起 Rust 内核，Windows 内嵌 WebView2，macOS/Linux 调 Chrome。
-//! 只负责托盘 / 单实例 / 自启 / 更新检查；不做任何界面逻辑（PRD §3.2）。
+//! 托盘负责打开方式（应用窗口 / Chrome 标签页）与退出；概览在 P1 接入。
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod prefs;
+
+use prefs::OpenMode;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, RunEvent};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, RunEvent, Wry};
 #[cfg(target_os = "windows")]
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 
 struct CoreProcess(Mutex<Option<Child>>);
 struct CoreUrl(Mutex<Option<String>>);
+struct TrayModeItems {
+    window: CheckMenuItem<Wry>,
+    browser: CheckMenuItem<Wry>,
+}
 
 fn core_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
@@ -51,6 +58,13 @@ fn spawn_core(app: &AppHandle) -> Result<String, String> {
         if web.join("index.html").is_file() {
             command.env("READER_WEB_DIST", &web);
         }
+    }
+    // Windows：core 是 console 子系统，必须显式隐藏，否则会弹黑框。
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
     }
     let mut child = command
         .stdout(Stdio::piped())
@@ -109,7 +123,19 @@ fn extract_url(line: &str) -> Option<String> {
 
 fn chrome_candidates() -> Vec<PathBuf> {
     let mut out = Vec::new();
-    if cfg!(target_os = "macos") {
+    if cfg!(target_os = "windows") {
+        for key in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"] {
+            if let Some(base) = std::env::var_os(key) {
+                out.push(
+                    PathBuf::from(base)
+                        .join("Google")
+                        .join("Chrome")
+                        .join("Application")
+                        .join("chrome.exe"),
+                );
+            }
+        }
+    } else if cfg!(target_os = "macos") {
         out.push(PathBuf::from(
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         ));
@@ -131,7 +157,7 @@ fn chrome_candidates() -> Vec<PathBuf> {
             }
         }
     }
-    out
+    out.into_iter().filter(|p| p.is_file()).collect()
 }
 
 fn which(name: &str) -> Result<PathBuf, ()> {
@@ -145,29 +171,27 @@ fn which(name: &str) -> Result<PathBuf, ()> {
     Err(())
 }
 
-fn open_in_chrome(app: &AppHandle, url: &str) {
-    let chrome = chrome_candidates().into_iter().next();
-    match chrome {
-        Some(bin) => {
-            let _ = Command::new(bin)
-                .arg(format!("--app={url}"))
-                .arg("--new-window")
-                .spawn();
-        }
-        None => {
-            app.dialog()
-                .message("md-reader 的界面只承诺 Chromium 内核。请先安装 Chrome 或 Chromium，再重新打开。")
-                .title("需要 Chrome / Chromium")
-                .blocking_show();
-            let _ = open_url("https://www.google.com/chrome/");
-        }
+fn open_browser(app: &AppHandle, url: &str) {
+    if let Some(bin) = chrome_candidates().into_iter().next() {
+        let _ = Command::new(bin).arg("--new-tab").arg(url).spawn();
+        return;
+    }
+    // 没有 Chrome 时退回默认浏览器；不阻塞启动。
+    if open_url(url).is_err() {
+        app.dialog()
+            .message("没有找到 Chrome / Chromium，也没有可用的默认浏览器。")
+            .title("无法打开界面")
+            .blocking_show();
     }
 }
 
 fn open_url(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd").args(["/C", "start", "", url]).spawn().map(|_| ())
+        Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map(|_| ())
     }
     #[cfg(target_os = "macos")]
     {
@@ -179,33 +203,39 @@ fn open_url(url: &str) -> std::io::Result<()> {
     }
 }
 
-fn open_ui(app: &AppHandle) {
+#[cfg(target_os = "windows")]
+fn open_app_window(app: &AppHandle, url: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.navigate(url.parse().expect("core url"));
+        let _ = window.set_focus();
+        return;
+    }
+    let parsed = url.parse().expect("core url");
+    let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+        .title("md-reader")
+        .inner_size(1280.0, 860.0)
+        .min_inner_size(880.0, 600.0)
+        .build();
+}
+
+fn open_main(app: &AppHandle) {
     let url = app
         .state::<CoreUrl>()
         .0
         .lock()
         .unwrap()
         .clone()
-        .unwrap_or_else(|| "http://127.0.0.1:0".into());
-
+        .filter(|u| !u.ends_with(":0"));
+    let Some(url) = url else { return };
+    let _mode = prefs::load_open_mode();
     #[cfg(target_os = "windows")]
     {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.navigate(url.parse().expect("core url"));
-            let _ = window.set_focus();
+        if _mode == OpenMode::Window {
+            open_app_window(app, &url);
             return;
         }
-        let parsed = url.parse().expect("core url");
-        let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
-            .title("md-reader")
-            .inner_size(1280.0, 860.0)
-            .min_inner_size(880.0, 600.0)
-            .build();
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        open_in_chrome(app, &url);
-    }
+    open_browser(app, &url);
 }
 
 fn stop_core(app: &AppHandle) {
@@ -215,10 +245,93 @@ fn stop_core(app: &AppHandle) {
     }
 }
 
+fn set_mode(app: &AppHandle, mode: OpenMode) {
+    if mode == OpenMode::Window && !cfg!(target_os = "windows") {
+        return;
+    }
+    if let Err(err) = prefs::save_open_mode(mode) {
+        eprintln!("[shell] 保存打开方式失败：{err}");
+        return;
+    }
+    let items = app.state::<TrayModeItems>();
+    let _ = items.window.set_checked(mode == OpenMode::Window);
+    let _ = items.browser.set_checked(mode == OpenMode::Browser);
+}
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "打开界面", true, None::<&str>)?;
+    let window_item = CheckMenuItem::with_id(
+        app,
+        "mode_window",
+        "默认：应用窗口",
+        cfg!(target_os = "windows"),
+        prefs::load_open_mode() == OpenMode::Window,
+        None::<&str>,
+    )?;
+    let browser_item = CheckMenuItem::with_id(
+        app,
+        "mode_browser",
+        "默认：Chrome 标签页",
+        true,
+        prefs::load_open_mode() == OpenMode::Browser,
+        None::<&str>,
+    )?;
+    let autostart = MenuItem::with_id(app, "autostart", "开机自启", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &sep1, &window_item, &browser_item, &sep2, &autostart, &quit],
+    )?;
+    app.manage(TrayModeItems {
+        window: window_item,
+        browser: browser_item,
+    });
+    TrayIconBuilder::new()
+        .tooltip(format!(
+            "md-reader · 默认打开方式：{}",
+            prefs::load_open_mode().label()
+        ))
+        .menu(&menu)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => open_main(app),
+            "mode_window" => set_mode(app, OpenMode::Window),
+            "mode_browser" => set_mode(app, OpenMode::Browser),
+            "autostart" => {
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = app.autolaunch();
+                let enabled = manager.is_enabled().unwrap_or(false);
+                let _ = if enabled {
+                    manager.disable()
+                } else {
+                    manager.enable()
+                };
+            }
+            "quit" => {
+                stop_core(app);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                open_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            open_ui(app);
+            open_main(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -233,7 +346,7 @@ fn main() {
                 Ok(url) => {
                     *handle.state::<CoreUrl>().0.lock().unwrap() = Some(url.clone());
                     build_tray(&handle)?;
-                    open_ui(&handle);
+                    open_main(&handle);
                 }
                 Err(err) => {
                     handle
@@ -253,35 +366,4 @@ fn main() {
                 stop_core(app);
             }
         });
-}
-
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "打开书库", true, None::<&str>)?;
-    let reopen = MenuItem::with_id(app, "reopen", "重新打开界面", true, None::<&str>)?;
-    let autostart = MenuItem::with_id(app, "autostart", "开机自启", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &reopen, &autostart, &quit])?;
-    TrayIconBuilder::new()
-        .tooltip("md-reader")
-        .menu(&menu)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" | "reopen" => open_ui(app),
-            "autostart" => {
-                use tauri_plugin_autostart::ManagerExt;
-                let manager = app.autolaunch();
-                let enabled = manager.is_enabled().unwrap_or(false);
-                let _ = if enabled {
-                    manager.disable()
-                } else {
-                    manager.enable()
-                };
-            }
-            "quit" => {
-                stop_core(app);
-                app.exit(0);
-            }
-            _ => {}
-        })
-        .build(app)?;
-    Ok(())
 }

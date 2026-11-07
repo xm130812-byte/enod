@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在无 root 的 WSL 里跑 Tauri Linux 壳：Broadway 后端 + 假 Chrome，验证 core 拉起与 --app 调用。
+# 在无 root 的 WSL 里跑 Tauri Linux 壳：Broadway 后端 + 假 Chrome，验证 core 拉起与 --new-tab 调用。
 set -uo pipefail
 SYS="$HOME/gtk-sysroot"
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -46,7 +46,7 @@ if [ ! -f /tmp/fake-chrome.log ]; then
 fi
 ARGS=$(cat /tmp/fake-chrome.log)
 echo "chrome args: $ARGS"
-URL=$(printf '%s' "$ARGS" | sed -n 's/.*--app=\(http[^ ]*\).*/\1/p')
+URL=$(printf '%s' "$ARGS" | sed -n 's/.*\(http:\/\/[^ ]*\).*/\1/p')
 echo "url: $URL"
 CODE=$(curl -s -o /tmp/health.json -w '%{http_code}' "$URL/api/v1/health")
 echo "health: $CODE $(cat /tmp/health.json)"
