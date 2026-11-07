@@ -209,13 +209,13 @@ fn open_url(url: &str) -> std::io::Result<()> {
 
 #[cfg(target_os = "windows")]
 fn open_app_window(app: &AppHandle, url: &str) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window("reader") {
         let _ = window.navigate(url.parse().expect("core url"));
         let _ = window.set_focus();
         return;
     }
     let parsed = url.parse().expect("core url");
-    let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+    let _ = WebviewWindowBuilder::new(app, "reader", WebviewUrl::External(parsed))
         .title("md-reader")
         .inner_size(1280.0, 860.0)
         .min_inner_size(880.0, 600.0)
