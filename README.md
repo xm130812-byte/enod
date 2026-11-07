@@ -349,7 +349,7 @@ Tauri v2 壳 ── spawn core / 托盘 / 唤起 Chrome 或开 WebView2 窗口
 | **POST** | **`/docs/:id/open`** | **v4**：用系统关联程序打开原文件 |
 | **GET** | **`/docs/:id/ai`** | **AI**：这篇文档的 `reader.ai[]` 产出 |
 | **DELETE** | **`/docs/:id/ai/:aiId`** | **AI**：删一条产出 |
-| **POST** | **`/ai/jobs`** | **AI**：入队 `{docId, kind, exact, prefix, suffix, pos, question}` |
+| **POST** | **`/ai/jobs`** | **AI**：入队 `{docId, kind, exact, prefix, suffix, pos, question}`；`kind=library` 是书库级问答（不带 docId，可给 `budgetChars`），结果落成新文档 |
 | **GET** | **`/ai/jobs`** | **AI**：队列（`?status=` / `?docId=`） |
 | **POST** | **`/ai/jobs/claim`** | **AI**：worker 领活，返回任务 + 已组装上下文包 |
 | **POST** | **`/ai/jobs/:jobId/complete`** · **`/fail`** · **`/cancel`** | **AI**：交结果（写进 `reader.ai[]`）/ 报失败 / 取消 |

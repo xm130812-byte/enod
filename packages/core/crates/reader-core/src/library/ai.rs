@@ -23,10 +23,22 @@ use std::sync::Arc;
 
 /// 任务包里带的提示词版本号，worker 用它决定用哪套提示词。
 pub const PROMPT_VERSION: &str = "enod-ai-v1";
+/// 书库级问答的任务类型：不针对某一段，回答整库范围内的问题。
+pub const LIBRARY_KIND: &str = "library";
 /// 单篇文档最多留多少条 AI 产出，超出丢最老的。
 const MAX_ENTRIES: usize = 50;
 const MAX_OUTPUT_CHARS: usize = 20_000;
 const CONTEXT_BUDGET: usize = 4_000;
+
+/** 书库级问答的上下文预算（字符）。默认 8000 字 ≈ 5.3k tokens，上限 24000 字。 */
+const LIBRARY_BUDGET_DEFAULT: usize = 8_000;
+const LIBRARY_BUDGET_MAX: usize = 24_000;
+const LIBRARY_BUDGET_MIN: usize = 2_000;
+/** 单段最多占多少字，避免一段长文把预算吃光。 */
+const LIBRARY_SECTION_MAX: usize = 2_000;
+/** 最多取几篇文档、每篇最多几段。 */
+const LIBRARY_MAX_DOCS: usize = 8;
+const LIBRARY_MAX_PER_DOC: usize = 2;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +49,8 @@ pub struct AiRequest {
     pub suffix: Option<String>,
     pub pos: Option<f64>,
     pub question: Option<String>,
+    /// 书库级问答的上下文预算（字符），不填用默认 8000
+    pub budget_chars: Option<i64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -122,6 +136,9 @@ impl LibraryService {
         if self.root_path().is_none() {
             return Err(AppError::new(409, "no-library", "还没有挂载书库"));
         }
+        if req.kind.as_deref() == Some(LIBRARY_KIND) {
+            return self.enqueue_library_job(&req).await;
+        }
         let row = self.require_doc(doc_id).await?;
         let kind = req.kind.unwrap_or_else(|| "explain".into());
         if !is_ai_kind(&kind) {
@@ -180,6 +197,66 @@ impl LibraryService {
         Ok(json!({ "jobId": id, "status": "queued", "kind": kind }))
     }
 
+    /// 书库级问答：不锚定某一段，检索整库后回答。
+    ///
+    /// 成本上限是设计出来的，不是估出来的：检索全在本地（FTS5 + jieba，0 token），
+    /// 只有最终挑选出来的片段进模型上下文，总量被 `budgetChars` 硬压住。
+    async fn enqueue_library_job(self: &Arc<Self>, req: &AiRequest) -> AppResult<Value> {
+        let question = req.question.clone().unwrap_or_default().trim().to_string();
+        if question.is_empty() {
+            return Err(AppError::bad_request("书库级问答需要 question"));
+        }
+        if question.chars().count() > 500 {
+            return Err(AppError::bad_request("问题太长了，压到 500 字以内"));
+        }
+        let budget = req
+            .budget_chars
+            .unwrap_or(LIBRARY_BUDGET_DEFAULT as i64)
+            .clamp(LIBRARY_BUDGET_MIN as i64, LIBRARY_BUDGET_MAX as i64);
+        let request = json!({
+            "exact": "",
+            "prefix": "",
+            "suffix": "",
+            "pos": 0,
+            "question": question,
+            "budgetChars": budget,
+        });
+        let pending = self.db.ai_jobs_list(None, Some(String::new()), 50).await?;
+        for job in &pending {
+            if matches!(job.status.as_str(), "queued" | "running") && job.kind == LIBRARY_KIND {
+                let same: Value = serde_json::from_str(&job.request).unwrap_or(Value::Null);
+                if same.get("question").and_then(|v| v.as_str()) == Some(question.as_str()) {
+                    return Ok(json!({ "jobId": job.id, "status": job.status, "deduped": true }));
+                }
+            }
+        }
+        let id = new_ulid();
+        let now = chrono::Utc::now().timestamp_millis();
+        self.db
+            .ai_job_insert(AiJobRow {
+                id: id.clone(),
+                doc_id: String::new(),
+                kind: LIBRARY_KIND.into(),
+                status: "queued".into(),
+                request: request.to_string(),
+                result: None,
+                error: None,
+                worker: None,
+                attempts: 0,
+                ai_id: None,
+                created_at: now,
+                updated_at: now,
+                claimed_at: None,
+                finished_at: None,
+            })
+            .await?;
+        self.hub.broadcast(
+            "ai-job",
+            json!({ "jobId": id, "docId": "", "kind": LIBRARY_KIND, "status": "queued" }),
+        );
+        Ok(json!({ "jobId": id, "status": "queued", "kind": LIBRARY_KIND }))
+    }
+
     /// worker 来领活：拿走一条排队的任务，附带已经组装好的上下文包。
     pub async fn claim_ai_job(self: &Arc<Self>, worker: &str) -> AppResult<Option<Value>> {
         let worker = if worker.trim().is_empty() {
@@ -201,6 +278,9 @@ impl LibraryService {
     }
 
     async fn build_job_package(&self, job: &AiJobRow) -> AppResult<Value> {
+        if job.kind == LIBRARY_KIND {
+            return self.build_library_package(job).await;
+        }
         let row = self.require_doc(&job.doc_id).await?;
         let loaded: Loaded = self.load_doc(&row).await?;
         let request: Value = serde_json::from_str(&job.request).unwrap_or(Value::Null);
@@ -235,6 +315,197 @@ impl LibraryService {
         }))
     }
 
+    /// 书库级问答的上下文包：检索出来的片段 + 预算账本。
+    async fn build_library_package(&self, job: &AiJobRow) -> AppResult<Value> {
+        let request: Value = serde_json::from_str(&job.request).unwrap_or(Value::Null);
+        let question = request
+            .get("question")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let budget = request
+            .get("budgetChars")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(LIBRARY_BUDGET_DEFAULT as i64)
+            .clamp(LIBRARY_BUDGET_MIN as i64, LIBRARY_BUDGET_MAX as i64) as usize;
+
+        let terms = question_terms(&question);
+        // 1) 本地检索候选文档：FTS5 + jieba，这一步完全不花 token
+        let mut ids = self.db.search_ids(&question, 20).await.unwrap_or_default();
+        if ids.is_empty() {
+            // 问题里的词一个都不在库里：退化成最近改动的几篇，至少给点上下文
+            if let Ok(rows) = self
+                .db
+                .list_docs(crate::db::ListOptions {
+                    limit: Some(LIBRARY_MAX_DOCS as i64),
+                    ..Default::default()
+                })
+                .await
+            {
+                ids = rows.into_iter().map(|row| row.id).collect();
+            }
+        }
+
+        // 2) 按小节打分，只留有词命中的段
+        let mut picks: Vec<LibraryPick> = Vec::new();
+        for id in ids.iter().take(12) {
+            let Ok(Some(row)) = self.db.get_doc(id).await else {
+                continue;
+            };
+            let Ok(loaded) = self.load_doc(&row).await else {
+                continue;
+            };
+            for (heading, text) in split_sections(&loaded.body) {
+                if text.trim().is_empty() {
+                    continue;
+                }
+                let score = score_text(&text, &terms);
+                if score <= 0 {
+                    continue;
+                }
+                picks.push(LibraryPick {
+                    score,
+                    doc_id: row.id.clone(),
+                    title: row.title.clone(),
+                    rel_path: row.rel_path.clone(),
+                    heading,
+                    text,
+                });
+            }
+        }
+        picks.sort_by(|a, b| b.score.cmp(&a.score));
+
+        // 3) 按预算贪心装箱：总量硬压住，单段单篇都有上限
+        let mut used = 0usize;
+        let mut per_doc: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut seen_docs: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut chosen: Vec<Value> = Vec::new();
+        for pick in picks {
+            if used >= budget {
+                break;
+            }
+            let is_new_doc = !seen_docs.contains(&pick.doc_id);
+            if is_new_doc && seen_docs.len() >= LIBRARY_MAX_DOCS {
+                continue;
+            }
+            let take = per_doc.get(&pick.doc_id).copied().unwrap_or(0);
+            if take >= LIBRARY_MAX_PER_DOC {
+                continue;
+            }
+            let remaining = budget - used;
+            if remaining < 200 {
+                break;
+            }
+            let text = clamp_chars(pick.text.trim(), LIBRARY_SECTION_MAX.min(remaining)).to_string();
+            let chars = text.chars().count();
+            if chars == 0 {
+                continue;
+            }
+            used += chars;
+            per_doc.insert(pick.doc_id.clone(), take + 1);
+            seen_docs.insert(pick.doc_id.clone());
+            chosen.push(json!({
+                "docId": pick.doc_id,
+                "title": pick.title,
+                "relPath": pick.rel_path,
+                "heading": pick.heading,
+                "text": text,
+                "chars": chars,
+            }));
+        }
+        let doc_count = seen_docs.len();
+
+        Ok(json!({
+            "jobId": job.id,
+            "docId": "",
+            "docTitle": "",
+            "relPath": "",
+            "kind": LIBRARY_KIND,
+            "attempts": job.attempts,
+            "promptVersion": PROMPT_VERSION,
+            "instructions": library_instructions(),
+            "question": question,
+            "anchor": { "exact": "", "prefix": "", "suffix": "", "pos": 0 },
+            "budgetChars": budget,
+            "usedChars": used,
+            "docCount": doc_count,
+            "sections": chosen,
+            // 单文档字段置空，保持 worker 侧形状一致
+            "section": { "heading": "", "text": "" },
+            "doc": { "title": "", "relPath": "", "tags": [], "sourceUrl": null, "words": 0 },
+        }))
+    }
+
+    /// 书库级问答交结果：答案落成一篇**新文档**，不是一条批注。
+    async fn complete_library_job(
+        self: &Arc<Self>,
+        job: &AiJobRow,
+        input: AiResultInput,
+    ) -> AppResult<Value> {
+        let output = input
+            .output
+            .unwrap_or_default()
+            .trim()
+            .chars()
+            .take(MAX_OUTPUT_CHARS)
+            .collect::<String>();
+        if output.is_empty() {
+            return Err(AppError::bad_request("结果内容为空"));
+        }
+        let request: Value = serde_json::from_str(&job.request).unwrap_or(Value::Null);
+        let question = request.get("question").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let mut body = String::new();
+        body.push_str(&format!("> {question}\n\n"));
+        body.push_str(&output);
+        body.push('\n');
+        let sources = input
+            .sources
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| !s.url.trim().is_empty())
+            .take(8)
+            .collect::<Vec<_>>();
+        if !sources.is_empty() {
+            body.push_str("\n## 外部来源\n\n");
+            for source in sources {
+                let title = if source.title.trim().is_empty() {
+                    source.url.clone()
+                } else {
+                    source.title
+                };
+                body.push_str(&format!("- [{title}]({url})\n", url = source.url));
+            }
+        }
+        if let Some(ref model) = input.model {
+            if !model.trim().is_empty() {
+                body.push_str(&format!("\n---\n\n由 `{model}` 依据本地检索片段生成，原始片段见任务 {job}。\n", job = job.id));
+            }
+        }
+        let title = format!("问书库：{}", question.chars().take(48).collect::<String>());
+        let created = self
+            .create_doc(crate::library::CreateDocInput {
+                dir: Some("Inbox".into()),
+                title: Some(title),
+                content: Some(body),
+                tags: Some(vec!["AI汇总".into(), "问书库".into()]),
+            })
+            .await?;
+        let result = json!({ "docId": created.doc.id, "relPath": created.doc.rel_path, "chars": output.chars().count() });
+        self.db
+            .ai_job_finish(&job.id, "done", Some(result.to_string()), None, None)
+            .await?;
+        self.hub.broadcast(
+            "ai-result",
+            json!({ "jobId": job.id, "docId": created.doc.id, "kind": LIBRARY_KIND }),
+        );
+        Ok(json!({
+            "jobId": job.id,
+            "status": "done",
+            "docId": created.doc.id,
+            "relPath": created.doc.rel_path,
+        }))
+    }
+
     /// worker 交回结果：写进 `reader.ai[]`，任务标记 done。
     pub async fn complete_ai_job(
         self: &Arc<Self>,
@@ -248,6 +519,9 @@ impl LibraryService {
             .ok_or_else(|| AppError::not_found("AI 任务不存在"))?;
         if matches!(job.status.as_str(), "done" | "canceled") {
             return Err(AppError::conflict("这条任务已经结束了"));
+        }
+        if job.kind == LIBRARY_KIND {
+            return self.complete_library_job(&job, input).await;
         }
         let output = input
             .output
@@ -402,6 +676,74 @@ fn instructions_for(kind: &str) -> &'static str {
         "summarize" => "用 5 条以内的要点概括这篇文档，每条一句话，按重要性排序。",
         _ => "回答读者针对这段原文提出的问题，答案要能直接放回原文旁边。",
     }
+}
+
+fn library_instructions() -> &'static str {
+    "只依据【片段】回答，不要补库里没有的内容。\
+     回答结构：先给一句结论，再分点列证据，每个结论后用 [[文档标题]] 标出来源；\
+     如果片段之间互相矛盾，明确写出矛盾点而不是取平均；\
+     片段不足以回答时，直接说「书库里没有相关材料」，并说明还缺什么。"
+}
+
+/* ------------------------------------------------------------------ 书库检索 */
+
+struct LibraryPick {
+    score: i32,
+    doc_id: String,
+    title: String,
+    rel_path: String,
+    heading: String,
+    text: String,
+}
+
+/// 把问题拆成检索词：按空白/标点切分，再补中文二元组（中文没有空格，靠切分拿不到词）。
+fn question_terms(question: &str) -> Vec<String> {
+    let mut terms: Vec<String> = Vec::new();
+    let separators = " \t\n，。！？；：、,.!?;:()（）【】[]\"'“”‘’《》—-";
+    for raw in question.split(|c: char| separators.contains(c)) {
+        let term = raw.trim().to_lowercase();
+        if term.chars().count() >= 2 && !terms.contains(&term) {
+            terms.push(term);
+        }
+    }
+    let chars: Vec<char> = question.chars().collect();
+    for pair in chars.windows(2) {
+        if !pair[0].is_alphanumeric() || !pair[1].is_alphanumeric() {
+            continue;
+        }
+        let bigram: String = pair.iter().collect();
+        if !terms.contains(&bigram) {
+            terms.push(bigram);
+        }
+    }
+    terms.truncate(64);
+    terms
+}
+
+fn score_text(text: &str, terms: &[String]) -> i32 {
+    let lower = text.to_lowercase();
+    terms.iter().filter(|term| lower.contains(term.as_str())).count() as i32
+}
+
+/// 按标题把正文切成小节（第一个标题之前的内容算一节，heading 为空）。
+fn split_sections(body: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut heading = String::new();
+    let mut start = 0usize;
+    let mut cursor = 0usize;
+    for line in body.split_inclusive('\n') {
+        let line_start = cursor;
+        cursor += line.len();
+        if heading_level(line).is_some() {
+            if line_start > start {
+                out.push((heading.clone(), body[start..line_start].to_string()));
+            }
+            heading = line.trim_start_matches('#').trim().to_string();
+            start = line_start;
+        }
+    }
+    out.push((heading, body[start..].to_string()));
+    out
 }
 
 /* ------------------------------------------------------------------ 上下文 */

@@ -183,13 +183,14 @@ export const api = {
       { method: 'DELETE' },
     ),
   createAiJob: (input: {
-    docId: string;
+    docId?: string;
     kind?: AiKind | string;
     exact?: string;
     prefix?: string;
     suffix?: string;
     pos?: number;
     question?: string;
+    budgetChars?: number;
   }) =>
     request<{ jobId: string; status: string; kind?: string; deduped?: boolean }>('/ai/jobs', {
       method: 'POST',

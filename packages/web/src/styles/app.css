@@ -2403,8 +2403,7 @@ mark.find-hit.active {
 }
 
 /* 提问框 */
-.ai-ask {
-  display: flex;
+.ai-ask {  display: flex;
   align-items: stretch;
   gap: 6px;
   margin: 0 0 4px;
@@ -2430,6 +2429,63 @@ mark.find-hit.active {
   align-self: flex-end;
   flex: none;
 }
+
+/* 问书库弹窗 */
+.ai-lib-input {
+  width: 100%;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.6;
+  outline: none;
+}
+.ai-lib-input:focus {
+  border-color: var(--accent);
+}
+.ai-lib-budget {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+.ai-lib-budget-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--fg-2);
+  font-size: 11.5px;
+  text-align: left;
+}
+.ai-lib-budget-item strong {
+  font-size: 12.5px;
+  color: var(--fg);
+}
+.ai-lib-budget-item.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.ai-lib-hint {
+  margin: 6px 0 0;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.ai-lib-cost {
+  margin-right: auto;
+  color: var(--fg-3);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
 
 .backlink-item,
 .outlink-item {

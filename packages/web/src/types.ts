@@ -41,8 +41,11 @@ export interface Annotation {
   created: string;
 }
 
-/** AI 任务类型：解释 / 核实 / 背景 / 反例 / 概括 / 自由提问 */
-export type AiKind = 'explain' | 'verify' | 'background' | 'counter' | 'summarize' | 'ask';
+/** AI 任务类型：解释 / 核实 / 背景 / 反例 / 概括 / 自由提问 / 书库级问答 */
+export type AiKind = 'explain' | 'verify' | 'background' | 'counter' | 'summarize' | 'ask' | 'library';
+
+/** 「问书库」的上下文预算档 */
+export type AiLibraryBudget = 'small' | 'standard' | 'deep';
 
 export interface AiSource {
   title: string;

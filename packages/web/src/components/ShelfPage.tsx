@@ -7,6 +7,7 @@ import { basename, dirOf, formatPercent, formatRelativeTime, formatWords, status
 import { Icon } from './Icons.tsx';
 import type { IconName } from './Icons.tsx';
 import { FolderExplorer } from './FolderExplorer.tsx';
+import { AiLibraryDialog } from './AiLibraryDialog.tsx';
 
 type StatusFilter = 'all' | DocStatus | 'inbox';
 type SortKey = 'recent' | 'added' | 'words' | 'title';
@@ -95,6 +96,8 @@ export function ShelfPage({
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
+  /** 「问书库」弹窗 */
+  const [askOpen, setAskOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagInput, setTagInput] = useState('');
   const [tagOpen, setTagOpen] = useState(false);
@@ -224,6 +227,10 @@ export function ShelfPage({
           <button className="btn btn-ghost small" onClick={onOpenClip} title="剪藏网页到 Inbox">
             <Icon name="clip" size={14} />
             剪藏
+          </button>
+          <button className="btn btn-ghost small" onClick={() => setAskOpen(true)} title="问书库：跨文档提问，答案落成新笔记">
+            <Icon name="sparkle" size={14} />
+            问书库
           </button>
           <button className="btn btn-ghost small" onClick={onSwitchMode} title="切换到一页（左侧文件树 + 中间文章）">
             <Icon name="portal" size={14} className="flip-x" />
@@ -378,6 +385,22 @@ export function ShelfPage({
             重试
           </button>
         </div>
+      )}
+
+      {askOpen && (
+        <AiLibraryDialog
+          onClose={() => setAskOpen(false)}
+          onSubmit={async (question, budgetChars) => {
+            try {
+              const res = await api.createAiJob({ kind: 'library', question, budgetChars });
+              toast(res.deduped ? '这个问题已经在队列里了' : '已入队，等 DSH 侧领走', 'success');
+              return true;
+            } catch (err) {
+              toast(err instanceof Error ? err.message : '入队失败', 'error');
+              return false;
+            }
+          }}
+        />
       )}
 
       {loading && docs.length === 0 ? (

@@ -330,9 +330,8 @@ pub async fn ai_job_create(
 ) -> AppResult<Response> {
     let body = body_json(body).await;
     let map = obj(&body);
-    let Some(doc_id) = str_field(&map, "docId") else {
-        return Err(AppError::bad_request("需要 docId"));
-    };
+    // 书库级问答不针对某篇文档，docId 可以为空
+    let doc_id = str_field(&map, "docId").unwrap_or_default();
     let request = crate::library::ai::AiRequest {
         kind: str_field(&map, "kind"),
         exact: str_field(&map, "exact"),
@@ -340,6 +339,7 @@ pub async fn ai_job_create(
         suffix: str_field(&map, "suffix"),
         pos: map.get("pos").and_then(|v| v.as_f64()),
         question: str_field(&map, "question"),
+        budget_chars: map.get("budgetChars").and_then(|v| v.as_i64()),
     };
     json_ok(state.service.enqueue_ai_job(&doc_id, request).await?)
 }
