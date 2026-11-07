@@ -158,3 +158,6 @@ bash scripts/backup.sh
   ExitRequested 留在托盘。
 - 2026-11-07：应用改名 enod（productName/identifier/窗口标题/tooltip/网页标题/侧栏品牌），
   新增透明书本托盘图标 `icons/tray-64.png`。
+- 2026-11-07：托盘图标改为应用图标，与应用窗口/任务栏统一。
+- 2026-11-07：Windows NSIS 打包完成：`enod_0.1.0_x64-setup.exe` 7,198,296 B（6.86 MiB），
+  SHA-256 `5D541E…C0A7EF`；静默安装、启动、关窗留托盘、二次启动均验证。
