@@ -321,7 +321,7 @@ fn set_mode(app: &AppHandle, mode: OpenMode) {
 
 #[cfg(target_os = "windows")]
 fn overview_url(app: &AppHandle) -> Option<String> {
-    core_url(app).map(|u| format!("{u}/tray.html"))
+    core_url(app).map(|u| format!("{u}/tray.html?v=2"))
 }
 
 #[cfg(target_os = "windows")]
@@ -369,12 +369,16 @@ fn show_overview(app: &AppHandle) {
             if let Some(id) = path.strip_prefix("/__shell/doc/") {
                 if let Some(base) = core_url(&nav_app) {
                     let link = format!("{base}/#/doc/{id}");
-                    if let Some(window) = nav_app.get_webview_window("overview") {
-                        let _ = window.hide();
-                    }
                     if prefs::load_open_mode() == OpenMode::Window {
-                        open_app_window(&nav_app, &link);
+                        open_main(&nav_app);
+                        if let Some(window) = nav_app.get_webview_window("reader") {
+                            let _ = window.navigate(link.parse().expect("doc url"));
+                            let _ = window.set_focus();
+                        }
                     } else {
+                        if let Some(window) = nav_app.get_webview_window("overview") {
+                            let _ = window.hide();
+                        }
                         open_browser(&nav_app, &link);
                     }
                 }

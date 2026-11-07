@@ -619,13 +619,16 @@ pub async fn fallback(State(state): State<AppState>, method: Method, uri: Uri, h
         Err(err) => return AppError::from(err).into_response(),
     };
     let is_index = file_path.file_name().map(|n| n == "index.html").unwrap_or(false);
+    let is_tray = file_path.file_name().map(|n| n == "tray.html").unwrap_or(false);
     let mut response = (StatusCode::OK, [(header::CONTENT_TYPE, mime_of(&file_path).to_string())], data).into_response();
     let h = response.headers_mut();
     h.insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
     h.insert(header::REFERRER_POLICY, "no-referrer".parse().unwrap());
     if is_index {
-        h.insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
         h.insert(header::CONTENT_SECURITY_POLICY, CSP.parse().unwrap());
+    }
+    if is_index || is_tray {
+        h.insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
     } else {
         h.insert(
             header::CACHE_CONTROL,

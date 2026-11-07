@@ -17,6 +17,16 @@
 
 已完成：WSL 副本、`pnpm install`（硬链接，1.3s）、web build（1.85s）、Rust 测试 + golden 全绿。
 
+### 0.1 本地 Windows 构建（已启用）
+
+- VS Build Tools：`C:\BuildTools`（VCTools + Windows SDK）
+- Rust：`%USERPROFILE%\.cargo`，`stable-x86_64-pc-windows-msvc`
+- 构建：`powershell -ExecutionPolicy Bypass -File scripts/local-build.ps1 -Target all`
+  - 首次 core ~12 分钟、shell ~8 分钟；之后 core 约 1 分钟、shell 约 1 分钟（含 LTO）
+  - 产物：`release/debug/bundle/{md-reader-shell.exe,md-reader-core.exe,web/}`
+- 注意：本地构建用 D: 镜像源码；改完 WSL 后先同步 `main.rs`/`routes.rs`/`web/dist` 再构建。
+- CI 仍保留 `windows-debug`（缓存后 1–3 分钟）作为兜底；打包必须用户确认。
+
 ## 1. 准备项（4 件，已完成/待提交）
 
 - [x] 脚本去 `/mnt/d` 硬编码：`packages/core/smoke.sh`、`node-smoke.sh`、`scripts/shell-smoke.sh`、`scripts/webview-check.cjs`
@@ -68,12 +78,12 @@ Tray Icon（常驻）
 
 ### P1 概览（Windows）
 
-- [ ] 360×480 无边框 WebView2 弹层，贴托盘、失焦隐藏
-- [ ] 统计 / 索引状态 / 最近 5 篇 / 当前工作区 / 打开方式
-- [ ] 工作区切换（`POST /library/open`）+ `library-changed` 刷新
-- [ ] SSE `/api/v1/events` 实时更新，5s 轮询兜底
-- [ ] 快捷动作：打开、搜索、新建、重新索引、设置、退出
-- [ ] 左键开概览，双击开主界面
+- [x] 360×480 无边框 WebView2 弹层，贴托盘、失焦隐藏
+- [x] 统计 / 索引状态 / 最近 5 篇 / 当前工作区 / 打开方式（显示，切换在托盘菜单）
+- [x] 工作区切换（`POST /library/open`）+ `library-changed` 刷新
+- [x] SSE `/api/v1/events` 实时更新，5s 轮询兜底
+- [x] 快捷动作：打开界面 / 重新索引 / 刷新（搜索、新建、设置留给 P3）
+- [x] 左键开概览（browser 模式）、托盘菜单「概览」；双击开主界面留给 P3
 
 ### P2 macOS/Linux 概览
 
@@ -86,7 +96,7 @@ Tray Icon（常驻）
 - [ ] 本次覆盖（这次用 Chrome/窗口）不写默认
 - [ ] 托盘状态点（索引中/错误）
 - [ ] 多显示器/DPI 定位
-- [ ] 关窗口 = 隐藏到托盘；托盘退出才结束内核
+- [x] 关窗口 = 隐藏到托盘；托盘退出才结束内核（P0 已验证）
 
 ## 4. 配置约定
 
@@ -137,3 +147,5 @@ bash scripts/backup.sh
 - 2026-11-07：P0 Windows 装包验收：无黑框、应用窗口/浏览器两种模式均打开。
 - 2026-11-07：修复关窗退出问题（hide 到托盘 + prevent_exit），debug bundle 实测关窗后
   shell/core 存活、二次启动恢复窗口；打包已暂停，等确认。
+- 2026-11-07：P1 概览完成：360×480 弹层、统计/索引/最近、工作区切换（tray-ws2 实测）、
+  SSE+5s 轮询、打开界面/重新索引/刷新；本地 MSVC 构建链打通（core 12m、shell 8m，增量约 1m）。
