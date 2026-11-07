@@ -40,6 +40,20 @@ fn debug_log(msg: &str) {
     }
 }
 
+/// 在 overview 的 on_navigation 回调里直接建窗口会卡死 UI 线程；
+/// 先让导航返回，再把动作排到主线程执行。
+#[cfg(target_os = "windows")]
+fn defer_action<F>(app: &AppHandle, action: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(80));
+        let _ = app.run_on_main_thread(action);
+    });
+}
+
 fn core_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -232,16 +246,26 @@ fn open_app_window(app: &AppHandle, url: &str) {
         debug_log(&format!(
             "open_app_window: unminimize={unmin:?} show={shown:?} focus={focused:?}"
         ));
-        let _ = window.navigate(url.parse().expect("core url"));
+        let nav = window.navigate(url.parse().expect("core url"));
+        debug_log(&format!("open_app_window: navigate={nav:?}"));
         return;
     }
     debug_log("open_app_window: create");
-    let parsed = url.parse().expect("core url");
-    let _ = WebviewWindowBuilder::new(app, "reader", WebviewUrl::External(parsed))
+    let parsed: tauri::Url = url.parse().expect("core url");
+    let built = WebviewWindowBuilder::new(app, "reader", WebviewUrl::External(parsed.clone()))
         .title("md-reader")
         .inner_size(1280.0, 860.0)
         .min_inner_size(880.0, 600.0)
         .build();
+    match built {
+        Ok(window) => {
+            debug_log("open_app_window: built");
+            if let Err(err) = window.navigate(parsed) {
+                debug_log(&format!("open_app_window: navigate error {err}"));
+            }
+        }
+        Err(err) => debug_log(&format!("open_app_window: build error {err}")),
+    }
 }
 
 fn core_url(app: &AppHandle) -> Option<String> {
@@ -349,9 +373,12 @@ fn set_mode(app: &AppHandle, mode: OpenMode) {
             if let Some(overview) = app.get_webview_window("overview") {
                 let _ = overview.hide();
             }
-            if let Some(window) = app.get_webview_window("reader") {
-                let _ = window.show();
-                let _ = window.set_focus();
+            if let Some(url) = core_url(app) {
+                if app.get_webview_window("reader").is_some() {
+                    open_app_window(app, &url);
+                } else {
+                    open_main(app);
+                }
             } else {
                 open_main(app);
             }
@@ -424,33 +451,43 @@ fn show_overview(app: &AppHandle) {
             debug_log(&format!("overview nav: {}", target.as_str()));
             let path = target.path();
             if path == "/__shell/open" {
-                open_main(&nav_app);
+                let app = nav_app.clone();
+                defer_action(&nav_app, move || open_main(&app));
                 return false;
             }
             if let Some(mode) = path.strip_prefix("/__shell/mode/") {
-                match mode {
-                    "window" => set_mode(&nav_app, OpenMode::Window),
-                    "browser" => set_mode(&nav_app, OpenMode::Browser),
-                    _ => {}
+                let target_mode = match mode {
+                    "window" => Some(OpenMode::Window),
+                    "browser" => Some(OpenMode::Browser),
+                    _ => None,
+                };
+                if let Some(target_mode) = target_mode {
+                    let app = nav_app.clone();
+                    defer_action(&nav_app, move || set_mode(&app, target_mode));
                 }
                 return false;
             }
             if let Some(view) = path.strip_prefix("/__shell/view/") {
                 if view == "simple" || view == "complex" {
-                    open_with_query(&nav_app, &format!("?view={view}"));
+                    let query = format!("?view={view}");
+                    let app = nav_app.clone();
+                    defer_action(&nav_app, move || open_with_query(&app, &query));
                 }
                 return false;
             }
             if path == "/__shell/search" {
-                open_with_query(&nav_app, "?focus=search");
+                let app = nav_app.clone();
+                defer_action(&nav_app, move || open_with_query(&app, "?focus=search"));
                 return false;
             }
             if path == "/__shell/new" {
-                open_with_query(&nav_app, "?new=1");
+                let app = nav_app.clone();
+                defer_action(&nav_app, move || open_with_query(&app, "?new=1"));
                 return false;
             }
             if path == "/__shell/settings" {
-                open_with_query(&nav_app, "?settings=1");
+                let app = nav_app.clone();
+                defer_action(&nav_app, move || open_with_query(&app, "?settings=1"));
                 return false;
             }
             if path == "/__shell/quit" {
@@ -458,21 +495,25 @@ fn show_overview(app: &AppHandle) {
                 return false;
             }
             if let Some(id) = path.strip_prefix("/__shell/doc/") {
-                if let Some(base) = core_url(&nav_app) {
-                    let link = format!("{base}/#/doc/{id}");
-                    if prefs::load_open_mode() == OpenMode::Window {
-                        open_main(&nav_app);
-                        if let Some(window) = nav_app.get_webview_window("reader") {
-                            let _ = window.navigate(link.parse().expect("doc url"));
-                            let _ = window.set_focus();
+                let id = id.to_string();
+                let app = nav_app.clone();
+                defer_action(&nav_app, move || {
+                    if let Some(base) = core_url(&app) {
+                        let link = format!("{base}/#/doc/{id}");
+                        if prefs::load_open_mode() == OpenMode::Window {
+                            open_main(&app);
+                            if let Some(window) = app.get_webview_window("reader") {
+                                let _ = window.navigate(link.parse().expect("doc url"));
+                                let _ = window.set_focus();
+                            }
+                        } else {
+                            if let Some(window) = app.get_webview_window("overview") {
+                                let _ = window.hide();
+                            }
+                            open_browser(&app, &link);
                         }
-                    } else {
-                        if let Some(window) = nav_app.get_webview_window("overview") {
-                            let _ = window.hide();
-                        }
-                        open_browser(&nav_app, &link);
                     }
-                }
+                });
                 return false;
             }
             true
@@ -485,9 +526,8 @@ fn show_overview(app: &AppHandle) {
                 *handle.state::<OverviewState>().0.lock().unwrap() = Some(std::time::Instant::now());
                 let _ = handle.hide();
             }
-            WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                let _ = handle.hide();
+            WindowEvent::CloseRequested { .. } => {
+                debug_log("overview close requested");
             }
             _ => {}
         });
@@ -623,13 +663,8 @@ fn main() {
         .manage(QuitState(AtomicBool::new(false)))
         .manage(OverviewState(Mutex::new(None)))
         .on_window_event(|window, event| {
-            if window.label() == "reader" {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    // 关窗只隐藏到托盘；只有托盘“退出”才真正结束应用。
-                    api.prevent_close();
-                    debug_log("close requested: hide");
-                    let _ = window.hide();
-                }
+            if let WindowEvent::CloseRequested { .. } = event {
+                debug_log(&format!("close requested: {}", window.label()));
             }
         })
         .setup(|app| {

@@ -97,7 +97,7 @@ Tray Icon（常驻）
 - [ ] 本次覆盖（这次用 Chrome/窗口）不写默认
 - [ ] 托盘状态点（索引中/错误）
 - [ ] 多显示器/DPI 定位
-- [x] 关窗口 = 隐藏到托盘；托盘退出才结束内核（P0 已验证）
+- [x] 关窗口 = 关闭窗口、应用留托盘；托盘退出才结束内核（P0 已验证）
 
 ## 4. 配置约定
 
@@ -153,3 +153,6 @@ bash scripts/backup.sh
   本地 MSVC 构建链打通（core 12m、shell 8m，增量约 1m）。
 - 2026-11-07：修复概览高亮与默认模式不一致：壳直接写 config.json 不会刷新 core 内存，
   已改为写文件后再 `PATCH /api/v1/config` 同步 core；实测 API/文件/高亮一致。
+- 2026-11-07：修复「切应用窗口白屏/关不掉」：在 overview 的 on_navigation 回调里同步建
+  WebView 窗会卡死 UI 线程；改为 defer 到主线程后创建。关窗改为真正销毁窗口，应用靠
+  ExitRequested 留在托盘。
