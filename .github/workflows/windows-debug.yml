@@ -23,6 +23,13 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-debug
+          workspaces: |
+            packages/core -> target
+            packages/shell/src-tauri -> target
+
       - name: Web build
         run: |
           pnpm install --frozen-lockfile

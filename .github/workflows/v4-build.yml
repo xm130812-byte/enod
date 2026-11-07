@@ -36,6 +36,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: v4-${{ matrix.os }}
+          workspaces: |
+            packages/core -> target
+            packages/shell/src-tauri -> target
+
       - name: Linux system deps (Tauri shell only)
         if: runner.os == 'Linux'
         run: |
