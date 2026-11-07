@@ -1857,27 +1857,9 @@ body.col-resizing .panel-handle {
   overflow: hidden;
   animation: ann-card-in 0.12s var(--ease-out);
 }
-/* 钉住的卡片在停靠栏里按普通文档流排，不再相对视口定位 */
-.ann-dock .ann-card {
-  position: relative;
-  pointer-events: auto;
-  flex: none;
-}
-
-.ann-dock {
-  position: fixed;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  z-index: 61;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  max-width: calc(100vw - 32px);
-  /* 卡片之间的空隙不挡正文点击 */
-  pointer-events: none;
+/* 钉住的卡片和悬浮卡一样按视口坐标摆放，只是不随滚动消失 */
+.ann-card.pinned {
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
 }
 
 .ann-card-head {
@@ -1888,6 +1870,12 @@ body.col-resizing .panel-handle {
   padding: 7px 6px 6px 11px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--bg-side);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.ann-card-head:active {
+  cursor: grabbing;
 }
 .ann-card-label {
   font-family: var(--font-mono);

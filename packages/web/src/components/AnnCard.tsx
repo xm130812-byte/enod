@@ -15,6 +15,9 @@ interface AnnCardProps {
   style: CSSProperties;
   pinned?: boolean;
   onPin?: () => void;
+  onDragStart?: () => void;
+  /** 拖标题栏时实时回调新的视口坐标。 */
+  onMove?: (x: number, y: number) => void;
   onClose: () => void;
   onEnter?: () => void;
   onLeave?: () => void;
@@ -29,9 +32,22 @@ interface AnnCardProps {
  * - 右下角可拖动改大小，尺寸由调用方统一保存；
  * - 悬浮态下鼠标移进卡片不关闭，靠外部的 enter/leave 计时器控制。
  */
-export function AnnCard({ annotation, style, pinned = false, onPin, onClose, onEnter, onLeave, onResize }: AnnCardProps) {
+export function AnnCard({
+  annotation,
+  style,
+  pinned = false,
+  onPin,
+  onClose,
+  onEnter,
+  onLeave,
+  onResize,
+  onDragStart,
+  onMove,
+}: AnnCardProps) {
   const drag = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const move = useRef<{ px: number; py: number; left: number; top: number } | null>(null);
 
   // 滚轮：正文还能滚时让它滚；已经滚到头就把事件拦下来。
   // 用原生非 passive 监听，React 的 onWheel 在 root 上是 passive，preventDefault 无效。
@@ -82,9 +98,40 @@ export function AnnCard({ annotation, style, pinned = false, onPin, onClose, onE
     }
   };
 
+  // 拖标题栏移动整张卡；位置夹在视口内
+  const startMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    move.current = { px: event.clientX, py: event.clientY, left: box.left, top: box.top };
+    onDragStart?.();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const moveMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = move.current;
+    if (!start) return;
+    const x = Math.round(Math.min(window.innerWidth - 80, Math.max(4, start.left + (event.clientX - start.px))));
+    const y = Math.round(Math.min(window.innerHeight - 48, Math.max(4, start.top + (event.clientY - start.py))));
+    onMove?.(x, y);
+  };
+
+  const endMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!move.current) return;
+    move.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* 已释放 */
+    }
+  };
+
   return (
     <div
       className={`ann-card ${pinned ? 'pinned' : ''}`}
+      ref={cardRef}
       style={style}
       role="dialog"
       aria-label="批注内容"
@@ -92,7 +139,14 @@ export function AnnCard({ annotation, style, pinned = false, onPin, onClose, onE
       onMouseLeave={onLeave}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="ann-card-head">
+      <div
+        className="ann-card-head"
+        title="拖动可移动位置"
+        onPointerDown={startMove}
+        onPointerMove={moveMove}
+        onPointerUp={endMove}
+        onPointerCancel={endMove}
+      >
         <span className={`ann-color dot-${annotation.color}`} />
         <span className="ann-card-label">批注</span>
         {annotation.created ? (

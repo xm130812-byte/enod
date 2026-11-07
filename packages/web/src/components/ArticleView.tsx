@@ -104,32 +104,47 @@ function readToc(root: HTMLElement): TocItem[] {
   }));
 }
 
-const CARD_SIZE_KEY = 'mr.annCard.size';
+const CARD_SIZE_KEY = 'mr.annCard.sizes';
 
-/** 读浮框尺寸；坏值回退默认。 */
-function readCardSize(): { w: number; h: number } {
-  try {
-    const raw = localStorage.getItem(CARD_SIZE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { w?: number; h?: number };
-      const w = Number(parsed.w);
-      const h = Number(parsed.h);
-      if (Number.isFinite(w) && Number.isFinite(h)) {
-        return {
-          w: Math.min(ANN_CARD_MAX.w, Math.max(ANN_CARD_MIN.w, w)),
-          h: Math.min(ANN_CARD_MAX.h, Math.max(ANN_CARD_MIN.h, h)),
-        };
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return { ...ANN_CARD_DEFAULT };
+/** 最多同时钉住 3 个浮框。 */
+const MAX_PINNED = 3;
+
+interface AnnCardState {
+  id: string;
+  x: number;
+  y: number;
+  pinned: boolean;
+  w: number;
+  h: number;
 }
 
-function persistCardSize(size: { w: number; h: number }): void {
+/** 每个批注分别记住自己的浮框尺寸。 */
+function readCardSizes(): Record<string, { w: number; h: number }> {
   try {
-    localStorage.setItem(CARD_SIZE_KEY, JSON.stringify(size));
+    const raw = localStorage.getItem(CARD_SIZE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, { w?: number; h?: number }>;
+    const out: Record<string, { w: number; h: number }> = {};
+    for (const [id, size] of Object.entries(parsed ?? {})) {
+      const w = Number(size?.w);
+      const h = Number(size?.h);
+      if (!Number.isFinite(w) || !Number.isFinite(h)) continue;
+      out[id] = {
+        w: Math.min(ANN_CARD_MAX.w, Math.max(ANN_CARD_MIN.w, w)),
+        h: Math.min(ANN_CARD_MAX.h, Math.max(ANN_CARD_MIN.h, h)),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function persistCardSize(id: string, size: { w: number; h: number }): void {
+  try {
+    const all = readCardSizes();
+    all[id] = size;
+    localStorage.setItem(CARD_SIZE_KEY, JSON.stringify(all));
   } catch {
     /* ignore */
   }
@@ -139,12 +154,10 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
   const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ left: number; top: number; title: string; text: string } | null>(null);
-  /** 悬浮中的批注（松手就消失） */
-  const [hoverAnn, setHoverAnn] = useState<{ id: string; left: number; top: number } | null>(null);
-  /** 钉住的批注 id，最多 3 个，按钉住的先后排 */
-  const [pinnedAnn, setPinnedAnn] = useState<string[]>([]);
-  /** 浮框尺寸，全局共用一份，写进 localStorage */
-  const [cardSize, setCardSize] = useState<{ w: number; h: number }>(() => readCardSize());
+  /** 浮框：同时最多 1 个悬浮卡（pinned=false）+ 3 个钉住的卡；坐标是视口坐标 */
+  const [cards, setCards] = useState<AnnCardState[]>([]);
+  /** 每张卡记住自己的尺寸（批注 id → 尺寸） */
+  const sizesRef = useRef<Record<string, { w: number; h: number }>>(readCardSizes());
   const hoverTimer = useRef<number | null>(null);
   const annTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
@@ -161,16 +174,18 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
   propsRef.current = { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage };
 
   /** 打开悬浮卡：贴在高亮旁边，下方放不下就翻到上方。 */
-  const openHover = useCallback(
-    (id: string, rect: DOMRect) => {
-      const height = Math.min(cardSize.h, window.innerHeight - 60);
-      const left = Math.max(12, Math.min(rect.left, window.innerWidth - cardSize.w - 12));
-      const below = rect.bottom + 10;
-      const top = below + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 10) : below;
-      setHoverAnn({ id, left, top });
-    },
-    [cardSize.w, cardSize.h],
-  );
+  const openHover = useCallback((id: string, rect: DOMRect) => {
+    const size = sizesRef.current[id] ?? ANN_CARD_DEFAULT;
+    const height = Math.min(size.h, window.innerHeight - 60);
+    const x = Math.max(12, Math.min(rect.left, window.innerWidth - size.w - 12));
+    const below = rect.bottom + 10;
+    const y = below + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 10) : below;
+    // 悬浮卡永远只有一个；钉住的原地保留
+    setCards((prev) => [
+      ...prev.filter((card) => card.pinned || card.id === id),
+      { id, x, y, pinned: false, w: size.w, h: size.h },
+    ]);
+  }, []);
 
   /** 延后关闭：给鼠标从高亮移到浮框留出时间，移进浮框时会被取消。 */
   const cancelClose = useCallback(() => {
@@ -180,19 +195,39 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     }
   }, []);
 
+  /** 只收掉没钉住的卡；钉住的留在原地。 */
   const scheduleClose = useCallback(() => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setHoverAnn(null), 220);
+    closeTimer.current = window.setTimeout(() => {
+      setCards((prev) => prev.filter((card) => card.pinned));
+    }, 220);
   }, []);
 
-  /** 钉住：最多 3 个，超了丢最早的那个。 */
-  const pinAnn = useCallback((id: string) => {
-    setPinnedAnn((prev) => (prev.includes(id) ? prev : [...prev, id].slice(-3)));
-    setHoverAnn(null);
+  /** 钉住：位置就地保留（不搬家），最多 3 个，超了丢最早钉的那个。 */
+  const pinCard = useCallback((id: string) => {
+    setCards((prev) => {
+      const next = prev.map((card) => (card.id === id ? { ...card, pinned: true } : card));
+      const pinned = next.filter((card) => card.pinned);
+      if (pinned.length <= MAX_PINNED) return next;
+      const drop = new Set(pinned.slice(0, pinned.length - MAX_PINNED).map((card) => card.id));
+      return next.filter((card) => !drop.has(card.id));
+    });
+    cancelClose();
+  }, [cancelClose]);
+
+  const closeCard = useCallback((id: string) => {
+    setCards((prev) => prev.filter((card) => card.id !== id));
   }, []);
 
-  const unpinAnn = useCallback((id: string) => {
-    setPinnedAnn((prev) => prev.filter((item) => item !== id));
+  const moveCard = useCallback((id: string, x: number, y: number) => {
+    setCards((prev) => prev.map((card) => (card.id === id ? { ...card, x, y } : card)));
+  }, []);
+
+  /** 每张卡自己的尺寸，拖动后记住（按批注 id 存）。 */
+  const resizeCard = useCallback((id: string, size: { w: number; h: number }) => {
+    sizesRef.current[id] = size;
+    persistCardSize(id, size);
+    setCards((prev) => prev.map((card) => (card.id === id ? { ...card, w: size.w, h: size.h } : card)));
   }, []);
 
   const applyAnchors = useCallback(() => {
@@ -287,32 +322,33 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     applyAnchors();
   }, [doc.annotations, applyAnchors]);
 
-  // 滚动时收起悬浮卡（钉住的保持不动）；浮框内部滚动不算
+  // 滚动时收起悬浮卡（钉住的留在原地）；浮框内部滚动不算
   useEffect(() => {
-    if (!hoverAnn) return;
+    if (!cards.some((card) => !card.pinned)) return;
     const hide = (event: Event) => {
       const target = event.target as Element | null;
       if (target && typeof target.closest === 'function' && target.closest('.ann-card')) return;
-      setHoverAnn(null);
+      setCards((prev) => prev.filter((card) => card.pinned));
     };
     window.addEventListener('scroll', hide, true);
     return () => window.removeEventListener('scroll', hide, true);
-  }, [hoverAnn]);
+  }, [cards]);
 
-  // Esc 关掉悬浮卡
+  // Esc 关掉没钉住的卡
   useEffect(() => {
-    if (!hoverAnn) return;
+    if (!cards.some((card) => !card.pinned)) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setHoverAnn(null);
+      if (event.key !== 'Escape') return;
+      setCards((prev) => prev.filter((card) => card.pinned));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [hoverAnn]);
+  }, [cards]);
 
-  // 切文档 / 删批注后丢掉失效的钉住项
+  // 切文档 / 删批注后丢掉失效的卡
   useEffect(() => {
-    setPinnedAnn((prev) => {
-      const next = prev.filter((id) => doc.annotations.some((item) => item.id === id));
+    setCards((prev) => {
+      const next = prev.filter((card) => doc.annotations.some((item) => item.id === card.id));
       return next.length === prev.length ? prev : next;
     });
   }, [doc.annotations]);
@@ -408,48 +444,31 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         }
         }}
       />
-      {hoverAnn &&
-        (() => {
-          const annotation = doc.annotations.find((item) => item.id === hoverAnn.id);
-          if (!annotation) return null;
-          return (
-            <AnnCard
-              annotation={annotation}
-              style={{ left: hoverAnn.left, top: hoverAnn.top, width: cardSize.w, maxHeight: cardSize.h }}
-              onEnter={cancelClose}
-              onLeave={scheduleClose}
-              onPin={() => pinAnn(annotation.id)}
-              onClose={() => setHoverAnn(null)}
-              onResize={(size) => {
-                setCardSize(size);
-                persistCardSize(size);
-              }}
-            />
-          );
-        })()}
-
-      {pinnedAnn.length > 0 && (
-        <div className="ann-dock">
-          {pinnedAnn.map((id) => {
-            const annotation = doc.annotations.find((item) => item.id === id);
-            if (!annotation) return null;
-            return (
-              <AnnCard
-                key={id}
-                annotation={annotation}
-                pinned
-                style={{ width: cardSize.w, height: cardSize.h }}
-                onPin={() => unpinAnn(id)}
-                onClose={() => unpinAnn(id)}
-                onResize={(size) => {
-                  setCardSize(size);
-                  persistCardSize(size);
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
+      {cards.map((card) => {
+        const annotation = doc.annotations.find((item) => item.id === card.id);
+        if (!annotation) return null;
+        return (
+          <AnnCard
+            key={card.id}
+            annotation={annotation}
+            pinned={card.pinned}
+            style={{
+              left: card.x,
+              top: card.y,
+              width: card.w,
+              ...(card.pinned ? { height: card.h } : { maxHeight: card.h }),
+            }}
+            onEnter={cancelClose}
+            onLeave={scheduleClose}
+            onPin={() => (card.pinned ? closeCard(card.id) : pinCard(card.id))}
+            onClose={() => closeCard(card.id)}
+            // 拖动即钉住：否则鼠标一离开卡片就没了
+            onDragStart={() => pinCard(card.id)}
+            onMove={(x, y) => moveCard(card.id, x, y)}
+            onResize={(size) => resizeCard(card.id, size)}
+          />
+        );
+      })}
       {preview && (
         <div
           className="wiki-preview"
