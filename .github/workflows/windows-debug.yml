@@ -1,0 +1,56 @@
+name: windows debug
+
+# 只出可运行的裸程序（shell + core + web），不做 NSIS/dmg 打包。
+# 用于本地先验收窗口关闭/托盘/打开方式，通过后再走 v4-build 打包。
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    name: Windows x64 debug bundle
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Web build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Rust core
+        run: cargo build --release -p reader-cli --manifest-path packages/core/Cargo.toml --target x86_64-pc-windows-msvc
+
+      - name: Stage sidecar
+        run: node scripts/prepare-sidecar.mjs x86_64-pc-windows-msvc
+
+      - name: Shell (no bundle)
+        working-directory: packages/shell/src-tauri
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Stage debug folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path debug/web | Out-Null
+          Copy-Item packages/shell/src-tauri/target/x86_64-pc-windows-msvc/release/md-reader-shell.exe debug/
+          Copy-Item packages/core/target/x86_64-pc-windows-msvc/release/md-reader-core.exe debug/
+          Copy-Item packages/web/dist/* debug/web/ -Recurse
+          Get-ChildItem -Recurse debug | Select-Object FullName,Length
+
+      - name: Upload debug bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: md-reader-windows-debug
+          path: debug/
+          if-no-files-found: error
+          retention-days: 7
