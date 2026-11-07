@@ -20,6 +20,8 @@ export interface DocSummary {
   mtime: number;
   size: number;
   annCount: number;
+  /** reader.ai[] 的条数（AI 产出） */
+  aiCount?: number;
   created: string | null;
   /** 文件格式：md 之外都是只读浏览（正文由服务端适配层转成 markdown） */
   kind?: DocKind;

@@ -985,6 +985,10 @@ kbd {
   align-items: center;
   gap: 3px;
 }
+/* 卡片上区分「我划了几条」和「AI 留了几条」 */
+.ann-count.ai-count {
+  color: color-mix(in oklab, var(--accent) 78%, var(--fg-3));
+}
 .card-progress {
   position: absolute;
   left: 0;
@@ -2343,6 +2347,88 @@ mark.find-hit.active {
 .ai-model {
   margin-left: auto;
   opacity: 0.75;
+}
+
+/* 正文里的 AI 锚点：一个小小的 ✦，不抢高亮的戏 */
+.ai-chip {
+  display: inline-block;
+  margin-left: 1px;
+  padding: 0 1px;
+  font-size: 0.72em;
+  line-height: 1;
+  color: color-mix(in oklab, var(--accent) 72%, var(--fg-3));
+  cursor: pointer;
+  vertical-align: super;
+  opacity: 0.62;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  user-select: none;
+}
+.ai-chip:hover {
+  opacity: 1;
+  transform: scale(1.25);
+}
+.ai-chip.ai-flash {
+  animation: ai-pulse 1.2s ease-out;
+}
+@keyframes ai-pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1.6);
+    text-shadow: 0 0 0 var(--accent);
+  }
+  100% {
+    opacity: 0.62;
+    transform: scale(1);
+  }
+}
+
+/* AI 浮层：比批注浮框轻，不拖不钉 */
+.ai-pop {
+  position: fixed;
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-md);
+  overflow-y: auto;
+  animation: palette-in 120ms var(--ease-out);
+}
+.ai-pop .ai-output {
+  max-height: none;
+  overflow: visible;
+}
+
+/* 提问框 */
+.ai-ask {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0 0 4px;
+}
+.ai-ask-input {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.55;
+  outline: none;
+}
+.ai-ask-input:focus {
+  border-color: var(--accent);
+}
+.ai-ask-btn {
+  align-self: flex-end;
+  flex: none;
 }
 
 .backlink-item,

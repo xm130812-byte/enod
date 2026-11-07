@@ -1392,6 +1392,10 @@
 .ai-item {
   border-radius: 6px;
 }
+.ai-item.focused {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 
 /* ------------------------------------------------------------ 剪藏 */
 

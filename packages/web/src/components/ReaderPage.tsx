@@ -103,6 +103,8 @@ export function ReaderPage({
   onActiveChangeRef.current = onActiveChange;
   const [activeHeading, setActiveHeading] = useState<string | null>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
+  /** AI 产出里锚点在正文中已经找不到的（原文被改过） */
+  const [aiOrphans, setAiOrphans] = useState<string[]>([]);
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
   const [panelTab, setPanelTab] = useState<PanelTab>('notes');
   /** 这篇文档在 AI 队列里的任务（排队/跑着/失败），完成后会变成 doc.ai 的一条。 */
@@ -135,6 +137,10 @@ export function ReaderPage({
   const [moveMode, setMoveMode] = useState<'move' | 'rename' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [focusAnnId, setFocusAnnId] = useState<string | null>(null);
+  /** 侧栏里高亮的 AI 条目（从正文 ✦ 或「重跑」跳过来时） */
+  const [focusAiId, setFocusAiId] = useState<string | null>(null);
+  /** AI tab 里的自由提问输入 */
+  const [aiQuestion, setAiQuestion] = useState('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -191,6 +197,8 @@ export function ReaderPage({
     setExternalChanged(false);
     setSelection(null);
     setOrphans([]);
+    setAiOrphans([]);
+    setFocusAiId(null);
     setProgress(0);
     setActiveHeading(null);
     onActiveChangeRef.current?.(null);
@@ -644,12 +652,48 @@ export function ReaderPage({
   };
 
   const jumpToAi = (entry: AiEntry): void => {
-    const match = (docRef.current?.annotations ?? []).find((ann) => ann.exact === entry.exact);
-    if (match) {
-      jumpToAnnotation(match.id);
+    if (!entry.exact.trim()) {
+      toast('这条是整篇概括，正文里没有对应锚点', 'info');
       return;
     }
-    toast('这段没有对应的高亮，用 Ctrl+K 搜片段更快', 'info');
+    if (aiOrphans.includes(entry.id)) {
+      toast('原文改动太多，这条的锚点已经对不上了', 'error');
+      return;
+    }
+    articleRef.current?.flashAi(entry.id);
+  };
+
+  /** AI tab 里的自由提问：带上当前选区（没选就整篇）。 */
+  const askAi = async (): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    const question = aiQuestion.trim();
+    if (!question) {
+      toast('先写一句想问的', 'error');
+      return;
+    }
+    try {
+      const res = await api.createAiJob({
+        docId: current.id,
+        kind: 'ask',
+        exact: selection?.exact ?? '',
+        prefix: selection?.prefix ?? '',
+        suffix: selection?.suffix ?? '',
+        pos: selection?.pos ?? 0,
+        question,
+      });
+      setAiQuestion('');
+      setPanelOpen(true);
+      setPanelTab('ai');
+      if (selection) {
+        setSelection(null);
+        window.getSelection()?.removeAllRanges();
+      }
+      await refreshAiJobs();
+      toast(res.deduped ? '这条已经在队列里了' : '已入队，等 DSH 侧领走', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '入队失败', 'error');
+    }
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -855,6 +899,17 @@ export function ReaderPage({
   const jumpToAnnotation = (id: string): void => {
     articleRef.current?.flash(id);
     setFocusAnnId(id);
+  };
+
+  /** 从正文里的 ✦ 点进来：开侧栏、切 AI tab、把那条滚进视野。 */
+  const jumpToAiById = (aiId: string): void => {
+    setPanelOpen(true);
+    setPanelTab('ai');
+    setFocusAiId(aiId);
+    window.setTimeout(() => {
+      const el = document.getElementById(`ai-${aiId}`);
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 60);
   };
 
   const handleWikiNavigate = (href: string, anchor: string | null): void => {
@@ -1210,11 +1265,16 @@ export function ReaderPage({
                   resolveWiki={resolveWiki}
                   onNavigateWiki={handleWikiNavigate}
                   onAnnotationClick={jumpToAnnotation}
+                  onAiClick={jumpToAiById}
+                  onAiDelete={(entry) => void deleteAi(entry)}
                   onToc={(items) => {
                     setToc(items);
                     onTocChangeRef.current?.(items);
                   }}
-                  onAnchors={({ orphaned }) => setOrphans(orphaned)}
+                  onAnchors={({ orphaned, aiOrphaned }) => {
+                    setOrphans(orphaned);
+                    setAiOrphans(aiOrphaned);
+                  }}
                   onImage={(src, alt) => setLightbox({ src, alt })}
                 />
                 <footer className="article-foot">
@@ -1363,6 +1423,35 @@ export function ReaderPage({
                       这篇文档关掉了 AI。把 frontmatter 里的 <code>reader.ai: false</code> 去掉就会重新接任务。
                     </p>
                   )}
+                  {doc.aiEnabled && (
+                    <div className="ai-ask">
+                      <textarea
+                        className="ai-ask-input"
+                        rows={2}
+                        placeholder={
+                          selection
+                            ? `就选中的「${selection.exact.slice(0, 20)}」提问…`
+                            : '就整篇提问（先选中一段也可以）…'
+                        }
+                        value={aiQuestion}
+                        onChange={(event) => setAiQuestion(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                            event.preventDefault();
+                            void askAi();
+                          }
+                        }}
+                      />
+                      <button
+                        className="btn btn-ghost tiny ai-ask-btn"
+                        disabled={!aiQuestion.trim()}
+                        onClick={() => void askAi()}
+                        title="Ctrl+Enter"
+                      >
+                        <Icon name="sparkle" size={12} /> 问
+                      </button>
+                    </div>
+                  )}
                   {aiJobs.map((job) => (
                     <article key={job.jobId} className={`ai-item ai-job job-${job.status}`}>
                       <header className="ai-head">
@@ -1416,6 +1505,7 @@ export function ReaderPage({
                     <AiCard
                       key={entry.id}
                       entry={entry}
+                      focused={focusAiId === entry.id}
                       onJump={() => jumpToAi(entry)}
                       onDelete={() => void deleteAi(entry)}
                       onRerun={() =>

@@ -17,6 +17,7 @@ export function kindLabel(kind: string): string {
 
 interface AiCardProps {
   entry: AiEntry;
+  focused?: boolean;
   onJump: () => void;
   onDelete: () => void;
   onRerun: () => void;
@@ -26,11 +27,11 @@ interface AiCardProps {
  * 侧栏里的一条 AI 产出。刻意不渲染 Markdown：
  * AI 的输出原样保留换行，避免把模型给的半成品结构渲染成正文的一部分。
  */
-export function AiCard({ entry, onJump, onDelete, onRerun }: AiCardProps) {
+export function AiCard({ entry, focused = false, onJump, onDelete, onRerun }: AiCardProps) {
   const label = kindLabel(entry.kind);
   const when = entry.created ? entry.created.slice(0, 16).replace('T', ' ') : '';
   return (
-    <article className="ai-item">
+    <article className={`ai-item${focused ? ' focused' : ''}`} id={`ai-${entry.id}`}>
       <header className="ai-head">
         <span className="ai-kind">
           <Icon name="sparkle" size={12} /> {label}

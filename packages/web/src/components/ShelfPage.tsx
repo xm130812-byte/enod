@@ -552,6 +552,12 @@ function DocCard({
               {doc.annCount}
             </span>
           )}
+          {(doc.aiCount ?? 0) > 0 && (
+            <span className="ann-count ai-count" title="AI 产出">
+              <Icon name="sparkle" size={12} />
+              {doc.aiCount}
+            </span>
+          )}
         </span>
       </div>
       {doc.progress > 0 && doc.progress < 1 && (

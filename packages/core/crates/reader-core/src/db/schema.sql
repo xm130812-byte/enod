@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS docs (
   eol          TEXT NOT NULL DEFAULT '\n',
   created      TEXT,
   indexed_at   INTEGER NOT NULL,
-  ann_count    INTEGER NOT NULL DEFAULT 0
+  ann_count    INTEGER NOT NULL DEFAULT 0,
+  ai_count     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS docs_status ON docs(status);
 CREATE INDEX IF NOT EXISTS docs_mtime ON docs(mtime);

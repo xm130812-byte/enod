@@ -51,6 +51,7 @@ pub struct DocDTO {
     pub mtime: i64,
     pub size: i64,
     pub ann_count: i64,
+    pub ai_count: i64,
     pub created: Option<String>,
     pub kind: String,
     pub editable: bool,
@@ -71,6 +72,7 @@ pub(crate) fn dto_from_row(row: &DocRow) -> DocDTO {    let kind = kind_of(&row.
         mtime: row.mtime,
         size: row.size,
         ann_count: row.ann_count,
+        ai_count: row.ai_count,
         created: row.created.clone(),
         kind: kind.as_str().to_string(),
         editable: kind.is_editable(),
@@ -964,7 +966,7 @@ impl LibraryService {
             None
         };
         self.db
-            .update_reader_meta(&row.id, reader.status, reader.progress, ann_count)
+            .update_reader_meta(&row.id, reader.status, reader.progress, ann_count, None)
             .await?;
         if reader.annotations.is_some() {
             self.db

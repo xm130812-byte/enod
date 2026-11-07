@@ -1,16 +1,25 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { DocPayload } from '../types.ts';
+import type { AiEntry, DocPayload } from '../types.ts';
 import { renderMarkdown } from '../lib/markdown.ts';
-import { applyMarks, collectText, flashAnnotation, markSpecsFromAnchors } from '../lib/annotate.ts';
+import {
+  applyAiChips,
+  applyMarks,
+  collectText,
+  flashAi,
+  flashAnnotation,
+  markSpecsFromAnchors,
+} from '../lib/annotate.ts';
 import { reanchorAll } from '../lib/reanchor.ts';
 import type { ResolvedAnchor } from '../lib/reanchor.ts';
 import { highlightCodeBlocks } from '../lib/highlight.ts';
 import { api } from '../api.ts';
 import type { TocItem } from './Toc.tsx';
 import { AnnCard, ANN_CARD_DEFAULT, ANN_CARD_MAX, ANN_CARD_MIN } from './AnnCard.tsx';
+import { AiPopover } from './AiPopover.tsx';
 
 export interface ArticleHandle {
   flash: (annotationId: string) => void;
+  flashAi: (aiId: string) => void;
   scrollToHeading: (slug: string) => void;
   getText: () => string;
 }
@@ -21,8 +30,10 @@ interface ArticleViewProps {
   resolveWiki: (target: string, anchor?: string) => { href: string } | null;
   onNavigateWiki: (href: string, anchor: string | null) => void;
   onAnnotationClick: (id: string) => void;
+  onAiClick: (id: string) => void;
+  onAiDelete: (entry: AiEntry) => void;
   onToc: (items: TocItem[]) => void;
-  onAnchors: (payload: { resolved: ResolvedAnchor[]; orphaned: string[] }) => void;
+  onAnchors: (payload: { resolved: ResolvedAnchor[]; orphaned: string[]; aiOrphaned: string[] }) => void;
   onImage: (src: string, alt: string) => void;
 }
 
@@ -151,15 +162,19 @@ function persistCardSize(id: string, size: { w: number; h: number }): void {
 }
 
 export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function ArticleView(props, ref) {
-  const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage } = props;
+  const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onAiClick, onAiDelete, onToc, onAnchors, onImage } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ left: number; top: number; title: string; text: string } | null>(null);
+  /** 正文里的 AI 锚点浮层：一次只开一个，不拖不钉 */
+  const [aiPop, setAiPop] = useState<{ id: string; left: number; top: number } | null>(null);
   /** 浮框：同时最多 1 个悬浮卡（pinned=false）+ 3 个钉住的卡；坐标是视口坐标 */
   const [cards, setCards] = useState<AnnCardState[]>([]);
   /** 每张卡记住自己的尺寸（批注 id → 尺寸） */
   const sizesRef = useRef<Record<string, { w: number; h: number }>>(readCardSizes());
   const hoverTimer = useRef<number | null>(null);
   const annTimer = useRef<number | null>(null);
+  const aiTimer = useRef<number | null>(null);
+  const aiCloseTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const propsRef = useRef({
     doc,
@@ -167,11 +182,13 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     resolveWiki,
     onNavigateWiki,
     onAnnotationClick,
+    onAiClick,
+    onAiDelete,
     onToc,
     onAnchors,
     onImage,
   });
-  propsRef.current = { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage };
+  propsRef.current = { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onAiClick, onAiDelete, onToc, onAnchors, onImage };
 
   /** 打开悬浮卡：贴在高亮旁边，下方放不下就翻到上方。 */
   const openHover = useCallback((id: string, rect: DOMRect) => {
@@ -219,7 +236,27 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     setCards((prev) => prev.filter((card) => card.id !== id));
   }, []);
 
-  const moveCard = useCallback((id: string, x: number, y: number) => {
+  /** 打开 AI 锚点浮层；位置贴着 ✦，下方放不下就翻到上方。 */
+  const openAiPop = useCallback((id: string, rect: DOMRect) => {
+    const width = 430;
+    const height = 300;
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+    const below = rect.bottom + 8;
+    const top = below + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 8) : below;
+    setAiPop({ id, left, top });
+  }, []);
+
+  const cancelAiClose = useCallback(() => {
+    if (aiCloseTimer.current !== null) {
+      window.clearTimeout(aiCloseTimer.current);
+      aiCloseTimer.current = null;
+    }
+  }, []);
+
+  const scheduleAiClose = useCallback(() => {
+    if (aiCloseTimer.current !== null) window.clearTimeout(aiCloseTimer.current);
+    aiCloseTimer.current = window.setTimeout(() => setAiPop(null), 200);
+  }, []);  const moveCard = useCallback((id: string, x: number, y: number) => {
     setCards((prev) => prev.map((card) => (card.id === id ? { ...card, x, y } : card)));
   }, []);
 
@@ -245,7 +282,25 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     const { resolved, orphaned } = reanchorAll(text, anchors);
     const colors = new Map(current.annotations.map((a) => [a.id, a.color]));
     applyMarks(el, markSpecsFromAnchors(resolved, colors));
-    propsRef.current.onAnchors({ resolved, orphaned: orphaned.map((o) => o.id) });
+
+    // AI 产出：只给有原文锚点的条目放小 ✦（概括整篇那种没有锚点）
+    const aiAnchors = (current.ai ?? [])
+      .filter((entry) => entry.exact.trim().length > 0)
+      .map((entry) => ({
+        id: entry.id,
+        exact: entry.exact,
+        prefix: entry.prefix,
+        suffix: entry.suffix,
+        pos: entry.pos,
+      }));
+    const aiResolved = reanchorAll(text, aiAnchors);
+    applyAiChips(el, aiResolved.resolved);
+
+    propsRef.current.onAnchors({
+      resolved,
+      orphaned: orphaned.map((o) => o.id),
+      aiOrphaned: aiResolved.orphaned.map((o) => o.id),
+    });
   }, []);
 
   useImperativeHandle(
@@ -253,6 +308,9 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     () => ({
       flash(id: string) {
         if (containerRef.current) flashAnnotation(containerRef.current, id);
+      },
+      flashAi(id: string) {
+        if (containerRef.current) flashAi(containerRef.current, id);
       },
       scrollToHeading(slug: string) {
         const el = containerRef.current;
@@ -317,10 +375,10 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     void highlightCodeBlocks(el, theme).then(() => applyAnchors());
   }, [theme, applyAnchors]);
 
-  // 批注变化：重新定位并高亮
+  // 批注 / AI 产出变化：重新定位并高亮
   useEffect(() => {
     applyAnchors();
-  }, [doc.annotations, applyAnchors]);
+  }, [doc.annotations, doc.ai, applyAnchors]);
 
   // 滚动时收起悬浮卡（钉住的留在原地）；浮框内部滚动不算
   useEffect(() => {
@@ -345,6 +403,25 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     return () => window.removeEventListener('keydown', onKey);
   }, [cards]);
 
+  // AI 浮层不钉，滚动正文或按 Esc 就收；浮层内部滚动不算
+  useEffect(() => {
+    if (!aiPop) return;
+    const onScroll = (event: Event) => {
+      const target = event.target as Element | null;
+      if (target && typeof target.closest === 'function' && target.closest('.ai-pop')) return;
+      setAiPop(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAiPop(null);
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [aiPop]);
+
   // 切文档 / 删批注后丢掉失效的卡
   useEffect(() => {
     setCards((prev) => {
@@ -353,12 +430,26 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     });
   }, [doc.annotations]);
 
+  // AI 产出被删掉后，浮层也要跟着消失
+  useEffect(() => {
+    setAiPop((prev) => (prev && (doc.ai ?? []).some((item) => item.id === prev.id) ? prev : null));
+  }, [doc.ai]);
+
   return (
     <>
       <div
         className="article"
         ref={containerRef}
         onMouseOver={(event) => {
+          const chip = (event.target as HTMLElement).closest<HTMLElement>('.ai-chip');
+          if (chip?.dataset.aiId) {
+            cancelAiClose();
+            if (aiTimer.current !== null) window.clearTimeout(aiTimer.current);
+            const id = chip.dataset.aiId;
+            const rect = chip.getBoundingClientRect();
+            aiTimer.current = window.setTimeout(() => openAiPop(id, rect), 100);
+            return;
+          }
           const mark = (event.target as HTMLElement).closest<HTMLElement>('mark.ann');
           if (mark?.dataset.annId) {
             cancelClose();
@@ -393,6 +484,14 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
           }, 260);
         }}
         onMouseOut={(event) => {
+          const chip = (event.target as HTMLElement).closest<HTMLElement>('.ai-chip');
+          if (chip) {
+            if (aiTimer.current !== null) {
+              window.clearTimeout(aiTimer.current);
+              aiTimer.current = null;
+            }
+            scheduleAiClose();
+          }
           const mark = (event.target as HTMLElement).closest<HTMLElement>('mark.ann');
           if (mark) {
             const to = event.relatedTarget as HTMLElement | null;
@@ -415,6 +514,13 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         }}
         onClick={(event) => {
         const target = event.target as HTMLElement;
+        const chip = target.closest<HTMLElement>('.ai-chip');
+        if (chip?.dataset.aiId) {
+          event.stopPropagation();
+          setAiPop(null);
+          propsRef.current.onAiClick(chip.dataset.aiId);
+          return;
+        }
         const wiki = target.closest<HTMLAnchorElement>('a.wiki-link');
         if (wiki) {
           event.preventDefault();
@@ -469,6 +575,27 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
           />
         );
       })}
+      {aiPop && (() => {
+        const entry = (doc.ai ?? []).find((item) => item.id === aiPop.id);
+        if (!entry) return null;
+        return (
+          <AiPopover
+            entry={entry}
+            left={aiPop.left}
+            top={aiPop.top}
+            onEnter={cancelAiClose}
+            onLeave={scheduleAiClose}
+            onOpenPanel={() => {
+              setAiPop(null);
+              propsRef.current.onAiClick(entry.id);
+            }}
+            onDelete={() => {
+              setAiPop(null);
+              propsRef.current.onAiDelete(entry);
+            }}
+          />
+        );
+      })()}
       {preview && (
         <div
           className="wiki-preview"

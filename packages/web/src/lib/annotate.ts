@@ -48,6 +48,13 @@ function unwrapMarks(root: HTMLElement): void {
     parent.removeChild(mark);
     parent.normalize();
   }
+  // AI 锚点标记（正文右侧的小 ✦）也要拆掉，否则重复渲染会越堆越多；
+  // 拆完把相邻文本节点合回去，避免每次重渲染都多切一刀
+  const chips = root.querySelectorAll('.ai-chip');
+  if (chips.length > 0) {
+    for (const chip of chips) chip.remove();
+    root.normalize();
+  }
 }
 
 export interface MarkSpec {
@@ -167,4 +174,50 @@ export function flashAnnotation(root: HTMLElement, id: string): void {
     node.classList.add('ann-flash');
     window.setTimeout(() => node.classList.remove('ann-flash'), 1400);
   }
+}
+
+/**
+ * AI 产出在正文里的落点标记：不包裹原文，只在锚点末尾插一个小 ✦。
+ *
+ * 为什么不套高亮：批注已经占用了 mark，AI 再套一层会互相打架，
+ * 而且「AI 说过话的地方」应该比「我划过的线」更轻。
+ * 插入顺序从后往前，避免前一次 splitText 把后面的偏移作废。
+ */
+export function applyAiChips(root: HTMLElement, resolved: ResolvedAnchor[]): void {
+  const items = resolved.filter((r) => r.end > 0).slice().sort((a, b) => b.end - a.end);
+  if (items.length === 0) return;
+  const { spans } = collectText(root);
+  for (const item of items) {
+    const span = spans.find((s) => item.end > s.start && item.end <= s.end);
+    if (!span) continue;
+    const local = item.end - span.start;
+    const node = span.node;
+    const parent = node.parentNode;
+    if (!parent) continue;
+    const chip = document.createElement('span');
+    chip.className = 'ai-chip';
+    chip.dataset.aiId = item.id;
+    chip.textContent = '✦';
+    chip.title = 'AI 在这里留过言';
+    let anchor: Text = node;
+    if (local > 0 && local < node.data.length) {
+      anchor = node.splitText(local);
+    } else if (local >= node.data.length) {
+      anchor = node;
+      parent.insertBefore(chip, anchor.nextSibling);
+      continue;
+    }
+    parent.insertBefore(chip, anchor);
+  }
+}
+
+/** 让某个 AI 锚点闪一下（从侧栏跳回正文时用）。 */
+export function flashAi(root: HTMLElement, aiId: string): void {
+  const chip = root.querySelector<HTMLElement>(`.ai-chip[data-ai-id="${CSS.escape(aiId)}"]`);
+  if (!chip) return;
+  chip.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  chip.classList.remove('ai-flash');
+  void chip.offsetWidth;
+  chip.classList.add('ai-flash');
+  window.setTimeout(() => chip.classList.remove('ai-flash'), 1400);
 }

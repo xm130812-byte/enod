@@ -99,6 +99,9 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     if !docs_cols.iter().any(|c| c == "meta_path") {
         conn.execute_batch("ALTER TABLE docs ADD COLUMN meta_path TEXT;")?;
     }
+    if !docs_cols.iter().any(|c| c == "ai_count") {
+        conn.execute_batch("ALTER TABLE docs ADD COLUMN ai_count INTEGER NOT NULL DEFAULT 0;")?;
+    }
     // v3 旧库没有 kind 列，必须先补列再建索引（schema.sql 里不能提前建）
     conn.execute_batch("CREATE INDEX IF NOT EXISTS docs_kind ON docs(kind);")?;
 
@@ -150,6 +153,7 @@ pub struct DocRecord {
     pub created: Option<String>,
     pub indexed_at: i64,
     pub ann_count: i64,
+    pub ai_count: i64,
     pub title_tokens: String,
     pub body_tokens: String,
     pub tags_tokens: String,
@@ -179,6 +183,7 @@ pub struct DocRow {
     pub created: Option<String>,
     pub indexed_at: i64,
     pub ann_count: i64,
+    pub ai_count: i64,
     pub title_tokens: String,
     pub body_tokens: String,
     pub tags_tokens: String,
@@ -221,6 +226,7 @@ fn row_to_doc(row: &Row<'_>) -> rusqlite::Result<DocRow> {
         created: row.get("created")?,
         indexed_at: row.get("indexed_at")?,
         ann_count: row.get("ann_count")?,
+        ai_count: row.get("ai_count")?,
         title_tokens: String::new(),
         body_tokens: String::new(),
         tags_tokens: String::new(),
@@ -332,8 +338,8 @@ impl Db {
             conn.execute(
                 "INSERT INTO docs (id, rel_path, kind, meta_path, mtime, size, hash, title, tags, aliases,
                                    status, progress, words, excerpt, source_url, encoding, eol, created,
-                                   indexed_at, ann_count)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
+                                   indexed_at, ann_count, ai_count)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)
                  ON CONFLICT(id) DO UPDATE SET
                    rel_path = excluded.rel_path, kind = excluded.kind, meta_path = excluded.meta_path,
                    mtime = excluded.mtime, size = excluded.size, hash = excluded.hash,
@@ -341,7 +347,8 @@ impl Db {
                    status = excluded.status, progress = excluded.progress, words = excluded.words,
                    excerpt = excluded.excerpt, source_url = excluded.source_url,
                    encoding = excluded.encoding, eol = excluded.eol, created = excluded.created,
-                   indexed_at = excluded.indexed_at, ann_count = excluded.ann_count",
+                   indexed_at = excluded.indexed_at, ann_count = excluded.ann_count,
+                   ai_count = excluded.ai_count",
                 params![
                     doc.id,
                     doc.rel_path,
@@ -363,6 +370,7 @@ impl Db {
                     doc.created,
                     doc.indexed_at,
                     doc.ann_count,
+                    doc.ai_count,
                 ],
             )?;
             conn.execute("DELETE FROM docs_fts WHERE doc_id = ?1", [&doc.id])?;
@@ -403,6 +411,7 @@ impl Db {
         status: Option<DocStatus>,
         progress: Option<f64>,
         ann_count: Option<i64>,
+        ai_count: Option<i64>,
     ) -> AppResult<()> {
         let id = id.to_string();
         self.call(move |conn| {
@@ -418,6 +427,10 @@ impl Db {
             }
             if let Some(count) = ann_count {
                 sets.push("ann_count = ?");
+                values.push(SqlValue::Integer(count));
+            }
+            if let Some(count) = ai_count {
+                sets.push("ai_count = ?");
                 values.push(SqlValue::Integer(count));
             }
             if sets.is_empty() {
