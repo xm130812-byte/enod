@@ -208,7 +208,7 @@ bash scripts/shell-smoke.sh
 ```
 
 - 解包 deb 到临时目录，用 `dbus-run-session` + `broadwayd` 起壳；
-- 壳从内核 stdout 解析端口 → 用 `--app=<url>` 调 Chrome（探测 PATH 里的 google-chrome）；
+- 壳从内核 stdout 解析端口 → 用 `--new-tab <url>` 调 Chrome（探测 PATH 里的 google-chrome）；
 - 假 Chrome 记录参数后退出，脚本再请求 `/api/v1/health`，确认内核仍在服务。
 
 ### 5.3 Windows NSIS：安装 + WebView2 实测
@@ -234,6 +234,9 @@ md-reader-shell.exe
 - 修复后重新装包：壳 + 内核常驻，WebView2（Edg/156）通过 CDP 验证到
   `.shelf`、19 篇文档、原有批注都在；截图
   `docs/screenshots/v4-windows-installed.png`。
+- **P0 托盘/打开方式**（2026-11-07）：Windows 装包验证 core/tasklist/cmd 均不再创建
+  conhost（19→19），应用窗口标题 `md-reader`；写 `shell.openMode=browser` 后只开
+  Chrome 标签、不开应用窗口。托盘菜单点击尚未做 UI 自动化，菜单构建/事件路径已随包运行。
 - 卸载：`uninstall.exe /S` 干净移除安装目录。
 
 ### 5.4 macOS：runner 拿不到
