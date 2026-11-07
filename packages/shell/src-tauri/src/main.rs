@@ -17,8 +17,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent, Wry};
 #[cfg(target_os = "windows")]
-use tauri::{WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_dialog::DialogExt;
+use tauri::{WebviewUrl, WebviewWindowBuilder};use tauri_plugin_dialog::DialogExt;
 
 struct CoreProcess(Mutex<Option<Child>>);
 struct CoreUrl(Mutex<Option<String>>);
@@ -254,6 +253,10 @@ fn core_url(app: &AppHandle) -> Option<String> {
 
 fn open_main(app: &AppHandle) {
     let Some(url) = core_url(app) else { return };
+    #[cfg(target_os = "windows")]
+    if let Some(window) = app.get_webview_window("overview") {
+        let _ = window.hide();
+    }
     let _mode = prefs::load_open_mode();
     debug_log(&format!("open_main mode={_mode:?} url={url}"));
     #[cfg(target_os = "windows")]
@@ -300,6 +303,10 @@ fn set_mode(app: &AppHandle, mode: OpenMode) {
             }
         }
         OpenMode::Window => {
+            #[cfg(target_os = "windows")]
+            if let Some(overview) = app.get_webview_window("overview") {
+                let _ = overview.hide();
+            }
             if let Some(window) = app.get_webview_window("reader") {
                 let _ = window.show();
                 let _ = window.set_focus();
@@ -310,8 +317,78 @@ fn set_mode(app: &AppHandle, mode: OpenMode) {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn overview_url(app: &AppHandle) -> Option<String> {
+    core_url(app).map(|u| format!("{u}/tray.html"))
+}
+
+#[cfg(target_os = "windows")]
+fn position_overview(app: &AppHandle, window: &tauri::WebviewWindow) {
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let scale = monitor.scale_factor();
+        let size = monitor.size();
+        let pos = monitor.position();
+        let w = (360.0 * scale) as i32;
+        let h = (480.0 * scale) as i32;
+        let x = pos.x + size.width as i32 - w - (12.0 * scale) as i32;
+        let y = pos.y + size.height as i32 - h - (52.0 * scale) as i32;
+        let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn show_overview(app: &AppHandle) {
+    let Some(url) = overview_url(app) else {
+        return;
+    };
+    if let Some(window) = app.get_webview_window("overview") {
+        position_overview(app, &window);
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+    let parsed = url.parse().expect("overview url");
+    let built = WebviewWindowBuilder::new(app, "overview", WebviewUrl::External(parsed))
+        .title("md-reader 概览")
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .inner_size(360.0, 480.0)
+        .visible(false)
+        .build();
+    if let Ok(window) = built {
+        let handle = window.clone();
+        window.on_window_event(move |event| match event {
+            WindowEvent::Focused(false) => {
+                let _ = handle.hide();
+            }
+            WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close();
+                let _ = handle.hide();
+            }
+            _ => {}
+        });
+        position_overview(app, &window);
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn toggle_overview(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("overview") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+            return;
+        }
+    }
+    show_overview(app);
+}
+
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "打开界面", true, None::<&str>)?;
+    let overview = MenuItem::with_id(app, "overview", "概览", cfg!(target_os = "windows"), None::<&str>)?;
     let window_item = CheckMenuItem::with_id(
         app,
         "mode_window",
@@ -334,7 +411,16 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let sep2 = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
-        &[&open, &sep1, &window_item, &browser_item, &sep2, &autostart, &quit],
+        &[
+            &open,
+            &overview,
+            &sep1,
+            &window_item,
+            &browser_item,
+            &sep2,
+            &autostart,
+            &quit,
+        ],
     )?;
     app.manage(TrayModeItems {
         window: window_item,
@@ -348,6 +434,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => open_main(app),
+            "overview" => {
+                #[cfg(target_os = "windows")]
+                toggle_overview(app);
+            }
             "mode_window" => set_mode(app, OpenMode::Window),
             "mode_browser" => set_mode(app, OpenMode::Browser),
             "autostart" => {
@@ -370,7 +460,15 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                open_main(tray.app_handle());
+                let app = tray.app_handle();
+                #[cfg(target_os = "windows")]
+                {
+                    if prefs::load_open_mode() == OpenMode::Browser {
+                        toggle_overview(app);
+                        return;
+                    }
+                }
+                open_main(app);
             }
         })
         .build(app)?;
@@ -408,6 +506,10 @@ fn main() {
                     *handle.state::<CoreUrl>().0.lock().unwrap() = Some(url.clone());
                     build_tray(&handle)?;
                     open_main(&handle);
+                    #[cfg(target_os = "windows")]
+                    if std::env::var("MD_READER_SHOW_OVERVIEW").is_ok() {
+                        show_overview(&handle);
+                    }
                 }
                 Err(err) => {
                     handle
