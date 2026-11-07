@@ -284,14 +284,54 @@ fn request_quit(app: &AppHandle) {
     app.exit(0);
 }
 
+/// 壳直接写 config.json 时 core 内存不会刷新；用 PATCH 让 core 同步。
+fn sync_mode_to_core(app: &AppHandle, mode: OpenMode) {
+    let Some(url) = core_url(app) else {
+        return;
+    };
+    let Some(port) = url.rsplit(':').next().and_then(|p| p.parse::<u16>().ok()) else {
+        return;
+    };
+    let body = format!(r#"{{"shell":{{"openMode":"{}"}}}}"#, mode.as_str());
+    let request = format!(
+        "PATCH /api/v1/config HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nX-Reader-Client: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    use std::io::{Read, Write};
+    let mut stream = match std::net::TcpStream::connect(("127.0.0.1", port)) {
+        Ok(stream) => stream,
+        Err(err) => {
+            debug_log(&format!("sync_mode connect failed: {err}"));
+            return;
+        }
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    if stream.write_all(request.as_bytes()).is_err() {
+        return;
+    }
+    let mut response = String::new();
+    let _ = stream.read_to_string(&mut response);
+    debug_log(&format!(
+        "sync_mode {mode:?}: {}",
+        response.lines().next().unwrap_or("no response")
+    ));
+}
+
 fn set_mode(app: &AppHandle, mode: OpenMode) {
     if mode == OpenMode::Window && !cfg!(target_os = "windows") {
         return;
     }
     if let Err(err) = prefs::save_open_mode(mode) {
+        debug_log(&format!("set_mode {mode:?} save failed: {err}"));
         eprintln!("[shell] 保存打开方式失败：{err}");
         return;
     }
+    debug_log(&format!(
+        "set_mode {mode:?} saved, readback={:?}",
+        prefs::load_open_mode()
+    ));
+    sync_mode_to_core(app, mode);
     let items = app.state::<TrayModeItems>();
     let _ = items.window.set_checked(mode == OpenMode::Window);
     let _ = items.browser.set_checked(mode == OpenMode::Browser);
@@ -381,6 +421,7 @@ fn show_overview(app: &AppHandle) {
         .inner_size(360.0, 620.0)
         .visible(false)
         .on_navigation(move |target| {
+            debug_log(&format!("overview nav: {}", target.as_str()));
             let path = target.path();
             if path == "/__shell/open" {
                 open_main(&nav_app);

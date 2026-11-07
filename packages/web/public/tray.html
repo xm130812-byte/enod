@@ -267,6 +267,9 @@ $('rescan').addEventListener('click', async () => {
   catch (e) { $('err').textContent = '重新索引失败：' + e.message; }
 });
 $('close').addEventListener('click', () => window.close());
+document.querySelectorAll('.seg a[href^="/__shell/mode/"]').forEach((a) => {
+  a.addEventListener('click', () => setTimeout(refresh, 250));
+});
 
 function connect() {
   if (es) es.close();
