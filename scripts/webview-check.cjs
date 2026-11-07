@@ -5,7 +5,13 @@ const path = require('node:path');
   const ctx = b.contexts()[0];
   const pages = ctx.pages();
   const p = pages[0] || (await ctx.newPage());
+  const origin = new URL(p.url()).origin;
+  await p.goto(origin + '/', { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('.shelf, .simple-view', { timeout: 20000 });
+  await p.evaluate(() => localStorage.clear());
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('.shelf, .simple-view', { timeout: 20000 });
+
   const title = await p.title();
   const body = ((await p.locator('body').innerText()) || '').slice(0, 200);
   console.log('title:', title);

@@ -56,7 +56,10 @@ Tray Icon（常驻）
 - [x] browser 模式用 `--new-tab <url>`，不再用 `--app`
 - [x] 单实例回调按默认模式打开
 - [x] Linux `cargo check` + deb 构建 + shell 冒烟（假 Chrome 收到 `--new-tab`）
-- [ ] Windows CI 装包验证：无黑框、菜单可用、两种模式切换持久化
+- [x] Windows CI 装包验证：无黑框、两种打开模式；菜单点击未做 UI 自动化
+  - CI run `42321928581`，NSIS 7,132,563 B；core/tasklist/cmd 均无 conhost（19→19）
+  - 应用窗口：标题 `md-reader`，WebView2 CDP 9223，UI 正常
+  - 浏览器模式：写 `shell.openMode=browser` 后只开 Chrome 标签，无应用窗口
 
 **验收**：双击快捷方式只出现应用窗口；托盘右键可切换默认方式；重启后仍生效；浏览器模式出现 Chrome 标签。
 
@@ -127,4 +130,5 @@ bash scripts/backup.sh
 ## 7. 状态日志
 
 - 2026-11-07：建立 WSL 主副本；4 项准备完成；开始 P0。
-- 2026-11-07：P0 代码完成（Linux 编译通过，shell 冒烟 `--new-tab` + health 200）；待 Windows CI 装包验收。
+- 2026-11-07：P0 代码完成（Linux 编译通过，shell 冒烟 `--new-tab` + health 200）。
+- 2026-11-07：P0 Windows 装包验收：无黑框、应用窗口/浏览器两种模式均打开；待 P1 概览。
