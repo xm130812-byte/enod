@@ -5,9 +5,13 @@ import { useLibrary } from '../hooks/useLibrary.tsx';
 import { dirOf, formatRelativeTime, formatWords, statusLabel } from '../lib/format.ts';
 import { Icon } from './Icons.tsx';
 import { Collapse } from './Collapse.tsx';
+import { ColumnResizer } from './ColumnResizer.tsx';
 import { ReaderPage } from './ReaderPage.tsx';
 import { TocList } from './Toc.tsx';
 import type { TocItem } from './Toc.tsx';
+
+/** 一页模式左栏默认宽度，与 desktop.css 里的初始值保持一致。 */
+const SIDE_W_DEFAULT = 252;
 
 interface FileNode {
   name: string;
@@ -118,6 +122,14 @@ export function SimpleLayout({
       return false;
     }
   });
+  const [sideW, setSideW] = useState<number>(() => {
+    try {
+      const raw = Number(localStorage.getItem('mr.simple.sideW'));
+      return Number.isFinite(raw) && raw >= 180 ? raw : SIDE_W_DEFAULT;
+    } catch {
+      return SIDE_W_DEFAULT;
+    }
+  });
   const initialized = useRef(false);
   const sideRef = useRef<HTMLElement>(null);
   const railRef = useRef<HTMLElement>(null);
@@ -140,10 +152,11 @@ export function SimpleLayout({
   useEffect(() => {
     try {
       localStorage.setItem('mr.simple.collapsed', collapsed ? '1' : '0');
+      localStorage.setItem('mr.simple.sideW', String(sideW));
     } catch {
       /* ignore */
     }
-  }, [collapsed]);
+  }, [collapsed, sideW]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -261,7 +274,22 @@ export function SimpleLayout({
 
   return (
     <div className={`simple ${collapsed ? 'side-collapsed' : ''}`}>
-      <aside className="simple-side" ref={sideRef}>
+      <aside
+        className="simple-side"
+        ref={sideRef}
+        style={collapsed ? undefined : { width: `${sideW}px` }}
+      >
+        {!collapsed && (
+          <ColumnResizer
+            width={sideW}
+            min={180}
+            max={420}
+            side="left"
+            onChange={setSideW}
+            onReset={() => setSideW(SIDE_W_DEFAULT)}
+            label="侧栏宽度"
+          />
+        )}
         <div className="simple-side-inner">
           <div className="simple-head">
             <div className="brand">

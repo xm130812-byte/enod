@@ -30,6 +30,7 @@
 }
 .simple-side {
   width: 252px;
+  position: relative;
   background: var(--bg-side);
   border-right: 1px solid var(--line-soft);
   overflow: hidden;
@@ -38,7 +39,7 @@
     opacity var(--dur) var(--ease);
 }
 .simple-side-inner {
-  width: 252px;
+  width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -813,6 +814,7 @@
 
 .toc {
   width: 214px;
+  position: relative;
   padding: 17px 7px 30px 9px;
   border-right: 1px solid var(--line-soft);
   background: var(--bg-side);
@@ -823,8 +825,15 @@
     opacity var(--dur) var(--ease),
     border-color var(--dur) var(--ease);
 }
-.toc > * {
-  min-width: 190px;
+.toc-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.toc-scroll > * {
+  min-width: 0;
 }
 .toc.collapsed,
 .reader.focus-mode .toc {
@@ -937,6 +946,7 @@
 
 .side-panel {
   width: 312px;
+  position: relative;
   background: var(--bg-side);
   border-left: 1px solid var(--line-soft);
   overflow: hidden;
@@ -951,7 +961,7 @@
   border-left-width: 0;
 }
 .side-panel-inner {
-  width: 312px;
+  width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1739,5 +1749,247 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------------ columns
+   Resizable / collapsible TOC and annotation panel, plus the annotation
+   hover card. Kept last so it can override the width transitions above. */
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  z-index: 7;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.col-resizer-left {
+  right: -3px;
+}
+.col-resizer-right {
+  left: -3px;
+}
+.col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.col-resizer:hover::after,
+body.col-resizing .col-resizer::after {
+  opacity: 0.55;
+}
+body.col-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.col-resizing .toc,
+body.col-resizing .side-panel,
+body.col-resizing .panel-handle {
+  transition: none !important;
+}
+
+.toc-collapse {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.toc:hover .toc-collapse,
+.toc-collapse:focus-visible {
+  opacity: 1;
+}
+
+.toc-handle {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 32px;
+  padding: 10px 0;
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-elev);
+  color: var(--fg-2);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(12px);
+  animation: handle-in var(--dur-slow) var(--ease-out);
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    width var(--dur) var(--ease);
+}
+.toc-handle:hover {
+  width: 36px;
+  color: var(--fg);
+}
+.toc-handle-label {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+}
+
+.ann-card {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 24px);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  color: var(--fg-2);
+  overflow: hidden;
+  animation: ann-card-in 0.12s var(--ease-out);
+}
+/* 钉住的卡片在停靠栏里按普通文档流排，不再相对视口定位 */
+.ann-dock .ann-card {
+  position: relative;
+  pointer-events: auto;
+  flex: none;
+}
+
+.ann-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 61;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  /* 卡片之间的空隙不挡正文点击 */
+  pointer-events: none;
+}
+
+.ann-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 7px 6px 6px 11px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg-side);
+}
+.ann-card-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.ann-card-time {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.ann-card-btn {
+  width: 22px;
+  height: 22px;
+  opacity: 0.65;
+  transition:
+    opacity var(--dur) var(--ease),
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.ann-card-btn:hover {
+  opacity: 1;
+}
+.ann-card-btn.active {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 正文区：长备注在这里滚动，高度由浮框高度决定 */
+.ann-card-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 9px 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.ann-card-exact {
+  margin: 0 0 6px;
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ann-card-note {
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px dashed var(--line-soft);
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--fg-2);
+  word-break: break-word;
+}
+.ann-card-empty {
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px dashed var(--line-soft);
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+/* 右下角拖拽改大小 */
+.ann-card-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 15px;
+  height: 15px;
+  cursor: nwse-resize;
+  opacity: 0.4;
+  background: linear-gradient(
+    135deg,
+    transparent 0 46%,
+    var(--fg-3) 46% 54%,
+    transparent 54% 66%,
+    var(--fg-3) 66% 74%,
+    transparent 74%
+  );
+  border-bottom-right-radius: 9px;
+  touch-action: none;
+}
+.ann-card-resize:hover {
+  opacity: 0.9;
+}
+@keyframes ann-card-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
 
 

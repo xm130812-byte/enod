@@ -17,6 +17,7 @@ import type { EditorHandle } from '../editor/EditorViewPane.tsx';
 import { Toc } from './Toc.tsx';
 import type { TocItem } from './Toc.tsx';
 import { SelectionToolbar } from './SelectionToolbar.tsx';
+import { ColumnResizer } from './ColumnResizer.tsx';
 import { Lightbox } from './Lightbox.tsx';
 import { ConflictDialog } from './ConflictDialog.tsx';
 import { MoveDialog } from './DocDialogs.tsx';
@@ -48,6 +49,20 @@ const STATUS_OPTIONS: { value: DocStatus; label: string }[] = [
 ];
 
 const scrollMemory = new Map<string, number>();
+
+/** 目录 / 批注栏的默认宽度，与 desktop.css 里的初始值保持一致。 */
+const TOC_W_DEFAULT = 214;
+const PANEL_W_DEFAULT = 312;
+
+/** 读一个持久化的列宽；坏值回退默认。 */
+function readStoredWidth(key: string, fallback: number): number {
+  try {
+    const raw = Number(localStorage.getItem(key));
+    return Number.isFinite(raw) && raw >= 120 ? raw : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /** 手机/平板是只读入口（PRD §3.3）：隐藏编辑与划线创建，查看批注不受影响。 */
 const MOBILE_READ_ONLY =
@@ -93,6 +108,15 @@ export function ReaderPage({
       return true;
     }
   });
+  const [tocOpen, setTocOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mr.reader.toc') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const [tocW, setTocW] = useState<number>(() => readStoredWidth('mr.reader.tocW', TOC_W_DEFAULT));
+  const [panelW, setPanelW] = useState<number>(() => readStoredWidth('mr.reader.panelW', PANEL_W_DEFAULT));
   const [immersive, setImmersive] = useState(false);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [findOpen, setFindOpen] = useState(false);
@@ -136,12 +160,15 @@ export function ReaderPage({
   useEffect(() => {
     try {
       localStorage.setItem('mr.reader.panel', panelOpen ? '1' : '0');
+      localStorage.setItem('mr.reader.toc', tocOpen ? '1' : '0');
+      localStorage.setItem('mr.reader.tocW', String(tocW));
+      localStorage.setItem('mr.reader.panelW', String(panelW));
     } catch {
       /* ignore */
     }
     const panel = panelRef.current as (HTMLElement & { inert?: boolean }) | null;
     if (panel) panel.inert = !panelOpen || focusMode;
-  }, [panelOpen, focusMode, doc?.id]);
+  }, [panelOpen, tocOpen, tocW, panelW, focusMode, doc?.id]);
 
   /* ---------------------------------------------------------------- load */
 
@@ -1008,9 +1035,25 @@ export function ReaderPage({
           <Toc
             items={toc}
             activeId={activeHeading}
-            collapsed={focusMode}
+            collapsed={focusMode || !tocOpen}
+            width={tocW}
+            onResize={setTocW}
+            onResetWidth={() => setTocW(TOC_W_DEFAULT)}
+            onCollapse={() => setTocOpen(false)}
             onJump={(id) => articleRef.current?.scrollToHeading(id)}
           />
+        )}
+
+        {!immersive && !simple && !focusMode && !tocOpen && (
+          <button
+            className="toc-handle"
+            onClick={() => setTocOpen(true)}
+            title="展开目录"
+            aria-label="展开目录"
+          >
+            <Icon name="chevrons-right" size={13} />
+            <span className="toc-handle-label">目录</span>
+          </button>
         )}
 
         <div className="reader-content">
@@ -1114,7 +1157,19 @@ export function ReaderPage({
             className={`side-panel ${panelOpen && !focusMode ? '' : 'closed'}`}
             ref={panelRef}
             aria-hidden={!panelOpen || focusMode}
+            style={panelOpen && !focusMode ? { width: `${panelW}px` } : undefined}
           >
+            {panelOpen && !focusMode && (
+              <ColumnResizer
+                width={panelW}
+                min={260}
+                max={620}
+                side="right"
+                onChange={setPanelW}
+                onReset={() => setPanelW(PANEL_W_DEFAULT)}
+                label="批注栏宽度"
+              />
+            )}
             <div className="side-panel-inner">
               <div className="panel-head">
                 <div className="panel-tabs">

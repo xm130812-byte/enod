@@ -7,6 +7,7 @@ import type { ResolvedAnchor } from '../lib/reanchor.ts';
 import { highlightCodeBlocks } from '../lib/highlight.ts';
 import { api } from '../api.ts';
 import type { TocItem } from './Toc.tsx';
+import { AnnCard, ANN_CARD_DEFAULT, ANN_CARD_MAX, ANN_CARD_MIN } from './AnnCard.tsx';
 
 export interface ArticleHandle {
   flash: (annotationId: string) => void;
@@ -103,11 +104,50 @@ function readToc(root: HTMLElement): TocItem[] {
   }));
 }
 
+const CARD_SIZE_KEY = 'mr.annCard.size';
+
+/** 读浮框尺寸；坏值回退默认。 */
+function readCardSize(): { w: number; h: number } {
+  try {
+    const raw = localStorage.getItem(CARD_SIZE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { w?: number; h?: number };
+      const w = Number(parsed.w);
+      const h = Number(parsed.h);
+      if (Number.isFinite(w) && Number.isFinite(h)) {
+        return {
+          w: Math.min(ANN_CARD_MAX.w, Math.max(ANN_CARD_MIN.w, w)),
+          h: Math.min(ANN_CARD_MAX.h, Math.max(ANN_CARD_MIN.h, h)),
+        };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { ...ANN_CARD_DEFAULT };
+}
+
+function persistCardSize(size: { w: number; h: number }): void {
+  try {
+    localStorage.setItem(CARD_SIZE_KEY, JSON.stringify(size));
+  } catch {
+    /* ignore */
+  }
+}
+
 export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function ArticleView(props, ref) {
   const { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ left: number; top: number; title: string; text: string } | null>(null);
+  /** 悬浮中的批注（松手就消失） */
+  const [hoverAnn, setHoverAnn] = useState<{ id: string; left: number; top: number } | null>(null);
+  /** 钉住的批注 id，最多 3 个，按钉住的先后排 */
+  const [pinnedAnn, setPinnedAnn] = useState<string[]>([]);
+  /** 浮框尺寸，全局共用一份，写进 localStorage */
+  const [cardSize, setCardSize] = useState<{ w: number; h: number }>(() => readCardSize());
   const hoverTimer = useRef<number | null>(null);
+  const annTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
   const propsRef = useRef({
     doc,
     theme,
@@ -119,6 +159,41 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     onImage,
   });
   propsRef.current = { doc, theme, resolveWiki, onNavigateWiki, onAnnotationClick, onToc, onAnchors, onImage };
+
+  /** 打开悬浮卡：贴在高亮旁边，下方放不下就翻到上方。 */
+  const openHover = useCallback(
+    (id: string, rect: DOMRect) => {
+      const height = Math.min(cardSize.h, window.innerHeight - 60);
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - cardSize.w - 12));
+      const below = rect.bottom + 10;
+      const top = below + height > window.innerHeight - 12 ? Math.max(12, rect.top - height - 10) : below;
+      setHoverAnn({ id, left, top });
+    },
+    [cardSize.w, cardSize.h],
+  );
+
+  /** 延后关闭：给鼠标从高亮移到浮框留出时间，移进浮框时会被取消。 */
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setHoverAnn(null), 220);
+  }, []);
+
+  /** 钉住：最多 3 个，超了丢最早的那个。 */
+  const pinAnn = useCallback((id: string) => {
+    setPinnedAnn((prev) => (prev.includes(id) ? prev : [...prev, id].slice(-3)));
+    setHoverAnn(null);
+  }, []);
+
+  const unpinAnn = useCallback((id: string) => {
+    setPinnedAnn((prev) => prev.filter((item) => item !== id));
+  }, []);
 
   const applyAnchors = useCallback(() => {
     const el = containerRef.current;
@@ -212,12 +287,51 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
     applyAnchors();
   }, [doc.annotations, applyAnchors]);
 
+  // 滚动时收起悬浮卡（钉住的保持不动）；浮框内部滚动不算
+  useEffect(() => {
+    if (!hoverAnn) return;
+    const hide = (event: Event) => {
+      const target = event.target as Element | null;
+      if (target && typeof target.closest === 'function' && target.closest('.ann-card')) return;
+      setHoverAnn(null);
+    };
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [hoverAnn]);
+
+  // Esc 关掉悬浮卡
+  useEffect(() => {
+    if (!hoverAnn) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHoverAnn(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hoverAnn]);
+
+  // 切文档 / 删批注后丢掉失效的钉住项
+  useEffect(() => {
+    setPinnedAnn((prev) => {
+      const next = prev.filter((id) => doc.annotations.some((item) => item.id === id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [doc.annotations]);
+
   return (
     <>
       <div
         className="article"
         ref={containerRef}
         onMouseOver={(event) => {
+          const mark = (event.target as HTMLElement).closest<HTMLElement>('mark.ann');
+          if (mark?.dataset.annId) {
+            cancelClose();
+            if (annTimer.current !== null) window.clearTimeout(annTimer.current);
+            const id = mark.dataset.annId;
+            const rect = mark.getBoundingClientRect();
+            annTimer.current = window.setTimeout(() => openHover(id, rect), 120);
+            return;
+          }
           const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a.wiki-link');
           if (!link || link.classList.contains('wiki-broken')) return;
           const target = link.dataset.wikiTarget;
@@ -243,6 +357,18 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
           }, 260);
         }}
         onMouseOut={(event) => {
+          const mark = (event.target as HTMLElement).closest<HTMLElement>('mark.ann');
+          if (mark) {
+            const to = event.relatedTarget as HTMLElement | null;
+            if (!to || !mark.contains(to)) {
+              if (annTimer.current !== null) {
+                window.clearTimeout(annTimer.current);
+                annTimer.current = null;
+              }
+              // 留出移动时间：鼠标移到浮框上时会被 onMouseEnter 取消
+              scheduleClose();
+            }
+          }
           const link = (event.target as HTMLElement).closest('a.wiki-link');
           if (!link) return;
           if (hoverTimer.current !== null) {
@@ -282,6 +408,48 @@ export const ArticleView = forwardRef<ArticleHandle, ArticleViewProps>(function 
         }
         }}
       />
+      {hoverAnn &&
+        (() => {
+          const annotation = doc.annotations.find((item) => item.id === hoverAnn.id);
+          if (!annotation) return null;
+          return (
+            <AnnCard
+              annotation={annotation}
+              style={{ left: hoverAnn.left, top: hoverAnn.top, width: cardSize.w, maxHeight: cardSize.h }}
+              onEnter={cancelClose}
+              onLeave={scheduleClose}
+              onPin={() => pinAnn(annotation.id)}
+              onClose={() => setHoverAnn(null)}
+              onResize={(size) => {
+                setCardSize(size);
+                persistCardSize(size);
+              }}
+            />
+          );
+        })()}
+
+      {pinnedAnn.length > 0 && (
+        <div className="ann-dock">
+          {pinnedAnn.map((id) => {
+            const annotation = doc.annotations.find((item) => item.id === id);
+            if (!annotation) return null;
+            return (
+              <AnnCard
+                key={id}
+                annotation={annotation}
+                pinned
+                style={{ width: cardSize.w, height: cardSize.h }}
+                onPin={() => unpinAnn(id)}
+                onClose={() => unpinAnn(id)}
+                onResize={(size) => {
+                  setCardSize(size);
+                  persistCardSize(size);
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
       {preview && (
         <div
           className="wiki-preview"
