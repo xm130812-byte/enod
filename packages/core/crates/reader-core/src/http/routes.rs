@@ -737,3 +737,90 @@ fn percent_decode(input: &str) -> String {
 fn percent_encode(input: &str) -> String {
     percent_encoding::utf8_percent_encode(input, percent_encoding::NON_ALPHANUMERIC).to_string()
 }
+
+/* ------------------------------------------------------------------ embed */
+
+/// 被嵌进宿主页面（DSH 右栏）时，「孩子写、宿主轮询」的状态板。
+///
+/// 为什么不走 postMessage：Electron 宿主里那条通道实测不落地（孩子发了，宿主一条
+/// 都收不到）。改成孩子把状态写回内核，宿主跨端口 GET——同一条本地回路，
+/// 不依赖浏览器消息机制。
+#[derive(Default)]
+struct EmbedBeacon {
+    seq: u64,
+    at: i64,
+    href: String,
+    title: String,
+}
+
+static EMBED_BEACON: std::sync::OnceLock<std::sync::Mutex<EmbedBeacon>> = std::sync::OnceLock::new();
+
+fn beacon() -> std::sync::MutexGuard<'static, EmbedBeacon> {
+    EMBED_BEACON
+        .get_or_init(|| std::sync::Mutex::new(EmbedBeacon::default()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn epoch_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// 内嵌页面报到：自己在读哪一篇。字段长度都截断，不让人灌爆内存。
+pub async fn embed_beacon(Json(body): Json<Value>) -> AppResult<Response> {
+    let href = body.get("href").and_then(|v| v.as_str()).unwrap_or("");
+    if !href.starts_with("http://127.0.0.1:") && !href.starts_with("http://localhost:") {
+        return Err(AppError::new(400, "bad-href", "href 必须是本机地址"));
+    }
+    let title = body
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .chars()
+        .take(200)
+        .collect::<String>();
+    {
+        let mut state = beacon();
+        state.seq += 1;
+        state.at = epoch_ms();
+        state.href = href.chars().take(2048).collect();
+        state.title = title;
+    }
+    json_ok(json!({ "ok": true }))
+}
+
+/// 宿主轮询这一条。只读、无凭据，所以对本机任意端口来源开放。
+pub async fn embed_state(headers: HeaderMap) -> AppResult<Response> {
+    let (seq, at, href, title) = {
+        let state = beacon();
+        (state.seq, state.at, state.href.clone(), state.title.clone())
+    };
+    let mut response = Json(json!({
+        "seq": seq,
+        "at": at,
+        "ageMs": if at == 0 { -1 } else { epoch_ms() - at },
+        "href": href,
+        "title": title,
+    }))
+    .into_response();
+    let origin = headers
+        .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("*");
+    if let Ok(value) = origin.parse() {
+        response
+            .headers_mut()
+            .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, value);
+    }
+    if let Ok(value) = "Origin".parse() {
+        response.headers_mut().append(header::VARY, value);
+    }
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    Ok(response)
+}
+

@@ -19,6 +19,20 @@ pub fn allowed_origins(port: u16) -> HashSet<String> {
     .collect()
 }
 
+/// 本机来源（任意端口）——只给内嵌状态这类只读接口用。
+fn is_loopback_origin(origin: &str) -> bool {
+    let rest = match origin.strip_prefix("http://") {
+        Some(rest) => rest,
+        None => return false,
+    };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let host = authority
+        .rsplit_once(':')
+        .map(|(host, _port)| host)
+        .unwrap_or(authority);
+    matches!(host, "127.0.0.1" | "localhost" | "[::1]")
+}
+
 pub async fn security_middleware(
     State(state): State<AppState>,
     req: Request,
@@ -92,7 +106,9 @@ fn check(state: &AppState, req: &Request) -> Result<(), AppError> {
     }
     if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
         let origin = origin.to_str().unwrap_or("");
-        if !allowed_origins(state.port).contains(origin) {
+        // 内嵌面板与内核不同端口，但同在本机：只对 /api/v1/embed 放行任意本机端口
+        let embed = req.uri().path().starts_with("/api/v1/embed");
+        if !(embed && is_loopback_origin(origin)) && !allowed_origins(state.port).contains(origin) {
             return Err(AppError::new(
                 403,
                 "bad-origin",

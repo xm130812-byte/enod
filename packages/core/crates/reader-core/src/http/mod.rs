@@ -101,6 +101,8 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/ai/jobs/{jobId}/cancel",
             post(routes::ai_job_cancel),
         )
+        .route("/api/v1/embed/beacon", post(routes::embed_beacon))
+        .route("/api/v1/embed/state", get(routes::embed_state))
         .route("/api/v1/events", get(routes::events))
         .fallback(routes::fallback)
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))

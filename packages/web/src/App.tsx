@@ -70,6 +70,9 @@ function useTheme(config: AppConfig | null): void {
  *
  * 只认 `?embed=1` 的页面，且只回给宿主：报当前在哪一篇，接宿主给的「跳到这一篇」。
  * 出去的消息带 `source: 'enod'`，进来的必须是 `source: 'dsh'` 且指向本站。
+ *
+ * 内嵌时会在右下角留一个「已嵌入」的小标记：桥到底跑没跑，肉眼就能判断，
+ * 不用开控制台猜。
  */
 function useEmbedBridge(): void {
   useEffect(() => {
@@ -77,19 +80,66 @@ function useEmbedBridge(): void {
     if (new URLSearchParams(window.location.search).get('embed') !== '1') return;
 
     const origin = window.location.origin;
+    // 祖先链上可能不止一层（宿主把自己套在容器里时），parent 与 top 都发
+    const targets: Window[] = [window.parent];
+    try {
+      if (window.top && window.top !== window.parent) targets.push(window.top);
+    } catch {
+      /* 跨源时 top 可能取不到，忽略 */
+    }
+
     const post = (message: Record<string, unknown>) => {
-      try {
-        window.parent.postMessage({ source: 'enod', ...message }, '*');
-      } catch {
-        /* 宿主已经关了 */
+      for (const target of targets) {
+        try {
+          target.postMessage({ source: 'enod', ...message }, '*');
+        } catch {
+          /* 宿主已经关了 */
+        }
       }
     };
+
+    const chip = document.createElement('div');
+    chip.dataset.enodBeacon = '1';
+    chip.textContent = `enod 已嵌入 · ${targets.length > 1 ? 'parent+top' : 'parent'}`;
+    chip.style.cssText = [
+      'position:fixed',
+      'right:8px',
+      'bottom:8px',
+      'z-index:2147483647',
+      'padding:2px 8px',
+      'border-radius:999px',
+      'background:rgba(15,17,21,.72)',
+      'color:#fff',
+      'font:11px/16px system-ui,sans-serif',
+      'pointer-events:none',
+      'opacity:.9',
+    ].join(';');
+    document.body.appendChild(chip);
 
     post({ type: 'enod:ready', href: window.location.href });
     // 宿主那边的监听可能比首帧晚一步，再报一次，代价可以忽略
     const again = window.setTimeout(() => post({ type: 'enod:ready', href: window.location.href }), 1200);
 
-    const onHash = () => post({ type: 'enod:navigate', href: window.location.href });
+    // postMessage 在部分 Electron 宿主里落不了地，所以同时把状态写回内核：
+    // 宿主直接轮询 GET /api/v1/embed/state，这条路不经过浏览器消息通道。
+    const report = () => {
+      void fetch(`${origin}/api/v1/embed/beacon`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-reader-client': '1' },
+        body: JSON.stringify({ href: window.location.href, title: document.title }),
+        keepalive: true,
+      }).catch(() => {
+        /* 内核没起或正在重启，下一次心跳再试 */
+      });
+    };
+    report();
+    const heartbeat = window.setInterval(report, 5000);
+    const chipTimer = window.setTimeout(() => chip.remove(), 20000);
+
+    const onHash = () => {
+      post({ type: 'enod:navigate', href: window.location.href });
+      report();
+    };
     window.addEventListener('hashchange', onHash);
 
     const onMessage = (event: MessageEvent) => {
@@ -103,6 +153,9 @@ function useEmbedBridge(): void {
 
     return () => {
       window.clearTimeout(again);
+      window.clearTimeout(chipTimer);
+      window.clearInterval(heartbeat);
+      chip.remove();
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('message', onMessage);
     };
