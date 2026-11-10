@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import 'katex/dist/katex.min.css';
+import './styles/dsh-tokens.css';
 import './styles/app.css';
 import './styles/markdown.css';
 import './styles/editor.css';

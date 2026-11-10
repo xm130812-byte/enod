@@ -16,9 +16,9 @@
     monospace;
   --font-body: var(--font-sans);
 
-  --radius: 8px;
-  --radius-sm: 5px;
-  --radius-xs: 3px;
+  --radius: var(--dsw-r-md);
+  --radius-sm: var(--dsw-r-sm);
+  --radius-xs: var(--dsw-r-xs);
 
   --reader-font-size: 18px;
   --reader-line-height: 1.75;
@@ -29,13 +29,21 @@
   --list-py: 9px;
   --panel-pad: 12px;
 
-  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur: 180ms;
-  --dur-slow: 260ms;
+  --ease: var(--dsw-ease);
+  --ease-out: var(--dsw-ease-out);
+  --dur: var(--dsw-dur);
+  --dur-fast: var(--dsw-dur-fast);
+  --dur-slow: var(--dsw-dur-slow);
+  /* 抽屉：几何与内容淡入同一条 180ms，离手就到位 */
+  --dur-drawer: 180ms;
 
-  --shadow-sm: 0 1px 2px rgba(28, 24, 18, 0.05), 0 6px 18px rgba(28, 24, 18, 0.04);
-  --shadow-md: 0 18px 50px rgba(20, 17, 12, 0.14), 0 2px 8px rgba(20, 17, 12, 0.06);
+  --shadow-sm: var(--dsw-shadow-1);
+  --shadow-md: var(--dsw-shadow-3);
+
+  /* 主按钮用 DSH 的近黑填充，强调色只给链接/选中/焦点环 */
+  --brand: var(--dsw-brand-fill);
+  --brand-hover: var(--dsw-brand-hover);
+  --brand-fg: var(--dsw-brand-fg);
 
   --yellow: #f0cd74;
   --green: #9cc9a4;
@@ -57,60 +65,58 @@
 
 :root,
 :root[data-theme='light'] {
-  --bg: #fbfaf7;
-  --bg-elev: #ffffff;
-  --bg-soft: #f3f1ec;
-  --bg-side: #f5f3ee;
-  --bg-hover: #eae7e0;
-  --bg-active: #e2ded5;
-  --fg: #201e1a;
-  --fg-2: #55514a;
-  --fg-3: #78736a;
-  --line: rgba(32, 30, 26, 0.09);
-  --line-soft: rgba(32, 30, 26, 0.055);
-  --line-strong: rgba(32, 30, 26, 0.18);
-  --danger: #b44533;
-  --code-bg: #f4f2ec;
-  --code-block-bg: #f6f4ef;
-  --mark-ink: #201e1a;
-  --overlay: rgba(24, 22, 18, 0.32);
-  --scrollbar: rgba(32, 30, 26, 0.18);
+  --bg: var(--dsw-bg-base);
+  --bg-elev: var(--dsw-bg-raised);
+  --bg-soft: var(--dsw-bg-soft);
+  --bg-side: var(--dsw-bg-sunken);
+  --bg-hover: var(--dsw-bg-hover);
+  --bg-active: var(--dsw-bg-active);
+  --fg: var(--dsw-label-1);
+  --fg-2: var(--dsw-label-2);
+  --fg-3: var(--dsw-label-3);
+  --line: var(--dsw-line-2);
+  --line-soft: var(--dsw-line-1);
+  --line-strong: var(--dsw-line-4);
+  --danger: var(--dsw-danger);
+  --code-bg: var(--dsw-n-75);
+  --code-block-bg: var(--dsw-n-75);
+  --mark-ink: var(--dsw-n-1000);
+  --overlay: var(--dsw-scrim);
+  --scrollbar: rgb(0 0 0 / 0.18);
   --shadow: var(--shadow-sm);
 
-  --accent: #3b5f8a;
-  --accent-hover: #2e4f77;
-  --accent-soft: rgba(59, 95, 138, 0.1);
+  --accent: var(--dsw-accent);
+  --accent-hover: var(--dsw-accent-hover);
+  --accent-soft: var(--dsw-accent-soft);
   --accent-fg: #ffffff;
 }
 
 /* ------------------------------------------------------------ 暗色 */
 
 :root[data-theme='dark'] {
-  --bg: #1a1b1e;
-  --bg-elev: #212226;
-  --bg-soft: #25262b;
-  --bg-side: #17181b;
-  --bg-hover: #2a2c31;
-  --bg-active: #33353b;
-  --fg: #e8e5df;
-  --fg-2: #bbb7ae;
-  --fg-3: #8b867d;
-  --line: rgba(255, 255, 255, 0.085);
-  --line-soft: rgba(255, 255, 255, 0.05);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  --danger: #e58e7d;
-  --code-bg: #232428;
-  --code-block-bg: #1d1e22;
-  --mark-ink: #1a1b1e;
-  --overlay: rgba(0, 0, 0, 0.58);
-  --scrollbar: rgba(255, 255, 255, 0.18);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.22);
-  --shadow-md: 0 24px 70px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+  --bg: var(--dsw-bg-base);
+  --bg-elev: var(--dsw-bg-raised);
+  --bg-soft: var(--dsw-bg-soft);
+  --bg-side: var(--dsw-bg-sunken);
+  --bg-hover: var(--dsw-bg-hover);
+  --bg-active: var(--dsw-bg-active);
+  --fg: var(--dsw-label-1);
+  --fg-2: var(--dsw-label-2);
+  --fg-3: var(--dsw-label-3);
+  --line: var(--dsw-line-2);
+  --line-soft: var(--dsw-line-1);
+  --line-strong: var(--dsw-line-4);
+  --danger: var(--dsw-danger);
+  --code-bg: var(--dsw-n-875);
+  --code-block-bg: var(--dsw-n-900);
+  --mark-ink: var(--dsw-n-950);
+  --overlay: var(--dsw-scrim);
+  --scrollbar: rgb(255 255 255 / 0.18);
 
-  --accent: #8fb3d9;
-  --accent-hover: #a9c8ea;
-  --accent-soft: rgba(143, 179, 217, 0.14);
-  --accent-fg: #14161a;
+  --accent: var(--dsw-accent);
+  --accent-hover: var(--dsw-accent-hover);
+  --accent-soft: var(--dsw-accent-soft);
+  --accent-fg: var(--dsw-n-1000);
 
   --yellow: #b8963f;
   --green: #5f9468;
@@ -356,13 +362,13 @@ a {
   transform: none;
 }
 .btn-primary {
-  background: var(--accent);
+  background: var(--brand);
   border-color: transparent;
-  color: var(--accent-fg);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  color: var(--brand-fg);
+  box-shadow: var(--dsw-shadow-1);
 }
 .btn-primary:hover {
-  background: var(--accent-hover);
+  background: var(--brand-hover);
   border-color: transparent;
 }
 .btn-ghost {
@@ -532,7 +538,7 @@ kbd {
   background: var(--accent);
 }
 .status-dot.status-done {
-  background: #4f8b5c;
+  background: var(--dsw-green-500);
 }
 
 .tag {
@@ -1614,10 +1620,10 @@ kbd {
 }
 .skeleton .sk-line {
   height: 12px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   background: linear-gradient(90deg, var(--bg-soft), var(--bg-hover), var(--bg-soft));
   background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
+  animation: shimmer 1.6s linear infinite;
 }
 .skeleton .sk-line.short {
   width: 45%;
@@ -3043,6 +3049,55 @@ mark.find-hit.active {
   font-size: 12px;
 }
 
+/* ------------------------------------------------------------ 悬浮信息卡 */
+
+.hover-card {
+  position: fixed;
+  z-index: 320;
+  padding: 10px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: hover-card-in 140ms var(--ease-out);
+}
+.hover-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+}
+.hover-card-path {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-3);
+  word-break: break-all;
+}
+.hover-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes hover-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ------------------------------------------------------------ toast / 离线 */
 
 .toast-stack {
@@ -3058,12 +3113,13 @@ mark.find-hit.active {
   pointer-events: none;
 }
 .toast {
-  background: var(--fg);
-  color: var(--bg);
-  border-radius: 0;
+  background: var(--brand);
+  color: var(--brand-fg);
+  border-radius: var(--radius-sm);
   padding: 7px 14px;
   font-size: 12px;
-  animation: toast-in 0.15s ease-out;
+  box-shadow: var(--shadow-md);
+  animation: toast-in 160ms var(--ease-out);
   max-width: 70vw;
 }
 .toast-error {
@@ -3071,15 +3127,17 @@ mark.find-hit.active {
   color: #fff;
 }
 .toast-success {
-  background: #3e7d4f;
-  color: #fff;
+  background: var(--dsw-green-500);
+  color: var(--dsw-n-1000);
 }
 @keyframes toast-in {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 

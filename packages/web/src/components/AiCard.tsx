@@ -34,7 +34,7 @@ export function AiCard({ entry, focused = false, onJump, onDelete, onRerun, reso
   const label = kindLabel(entry.kind);
   const when = entry.created ? entry.created.slice(0, 16).replace('T', ' ') : '';
   return (
-    <article className={`ai-item${focused ? ' focused' : ''}`} id={`ai-${entry.id}`}>
+    <article className={`ai-item${focused ? ' focused' : ''}`} id={`ai-${entry.id}`} data-flip-key={entry.id}>
       <header className="ai-head">
         <span className="ai-kind">
           <Icon name="sparkle" size={12} /> {label}

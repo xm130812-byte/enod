@@ -20,6 +20,7 @@ import type { EditorHandle } from '../editor/EditorViewPane.tsx';
 import { Toc } from './Toc.tsx';
 import type { TocItem } from './Toc.tsx';
 import { SelectionToolbar } from './SelectionToolbar.tsx';
+import { useRowFlip } from '../lib/flip.ts';
 import { AiCard, kindLabel } from './AiCard.tsx';
 import { ColumnResizer } from './ColumnResizer.tsx';
 import { Lightbox } from './Lightbox.tsx';
@@ -931,6 +932,17 @@ export function ReaderPage({
   const aiList = doc?.ai ?? [];
   const orphanList = useMemo(() => annotationList.filter((a) => orphans.includes(a.id)), [annotationList, orphans]);
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
+
+  // 批注 / AI 列表在增删时滑位；切 tab 是整体换内容，不播
+  const panelBodyRef = useRef<HTMLDivElement>(null);
+  useRowFlip(
+    panelBodyRef,
+    useMemo(
+      () => [...annotationList.map((a) => a.id), ...aiList.map((e) => e.id)].join(','),
+      [annotationList, aiList],
+    ),
+    panelTab,
+  );
   const statusLabelText = doc ? statusLabel(doc.status) : '';
   const theme = config?.theme === 'dark' || (config?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
 
@@ -1362,7 +1374,7 @@ export function ReaderPage({
                 </button>
               </div>
 
-              <div className="panel-body">
+              <div className="panel-body" ref={panelBodyRef}>
               {panelTab === 'notes' && (
                 <>
                   {annotationList.length > 0 && (
@@ -1383,7 +1395,7 @@ export function ReaderPage({
                       </h4>
                       <p className="muted small">原文被改动太多，找不到锚点。选中新的文字后可重新绑定。</p>
                       {orphanList.map((ann) => (
-                        <article key={ann.id} className="ann-item orphan">
+                        <article key={ann.id} className="ann-item orphan" data-flip-key={ann.id}>
                           <blockquote>{ann.exact}</blockquote>
                           <div className="ann-actions">
                             <button className="btn btn-ghost tiny" onClick={() => void rebindAnnotation(ann)}>
@@ -1461,7 +1473,7 @@ export function ReaderPage({
                     </div>
                   )}
                   {aiJobs.map((job) => (
-                    <article key={job.jobId} className={`ai-item ai-job job-${job.status}`}>
+                    <article key={job.jobId} className={`ai-item ai-job job-${job.status}`} data-flip-key={job.jobId}>
                       <header className="ai-head">
                         <span className="ai-kind">
                           <Icon name="sparkle" size={12} /> {kindLabel(job.kind)}
@@ -1749,6 +1761,7 @@ function AnnotationCard({
   return (
     <article
       className={`ann-item ${focused ? 'focused' : ''}`}
+      data-flip-key={annotation.id}
       onClick={(event) => {
         if ((event.target as HTMLElement).closest('textarea, button')) return;
         onJump();

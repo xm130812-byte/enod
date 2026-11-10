@@ -8,6 +8,8 @@ import { Icon } from './Icons.tsx';
 import type { IconName } from './Icons.tsx';
 import { FolderExplorer } from './FolderExplorer.tsx';
 import { AiLibraryDialog } from './AiLibraryDialog.tsx';
+import { useRowFlip } from '../lib/flip.ts';
+import { useHoverCard } from './HoverCard.tsx';
 
 type StatusFilter = 'all' | DocStatus | 'inbox';
 type SortKey = 'recent' | 'added' | 'words' | 'title';
@@ -101,6 +103,7 @@ export function ShelfPage({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagInput, setTagInput] = useState('');
   const [tagOpen, setTagOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // 记住书架布局与筛选，进入文章再返回不会重置
   useEffect(() => {
@@ -128,6 +131,13 @@ export function ShelfPage({
     );
     return sortDocs(filtered, sort);
   }, [docs, status, query, activeTag, sort]);
+
+  // 列表视图的行在筛选/排序/增删时滑到新位置；切视图整体重挂，不播
+  useRowFlip(
+    listRef,
+    useMemo(() => visible.map((doc) => doc.id).join(','), [visible]),
+    view,
+  );
 
   const filteredTags = useMemo(
     () => tags.filter((t) => !tagQuery || t.tag.toLowerCase().includes(tagQuery.toLowerCase())),
@@ -440,7 +450,7 @@ export function ShelfPage({
         <FolderExplorer docs={visible} dirs={info?.dirs ?? []} onOpenDoc={onOpenDoc} />
       ) : view === 'list' ? (
         <div className="shelf-scroll">
-          <div className="doc-list">
+          <div className="doc-list" ref={listRef}>
             <div className="list-head" aria-hidden="true">
               <span />
               <span />
@@ -541,6 +551,7 @@ function DocCard({
       className={`doc-card ${bulkMode ? 'selectable' : ''} ${selected ? 'selected' : ''}`}
       onClick={onClick}
       title={doc.title}
+      data-flip-key={doc.id}
     >
       <div className="card-top">
         <span className={`status-pill status-${doc.status}`}>
@@ -604,8 +615,26 @@ function ListRow({
   bulkMode: boolean;
   selected: boolean;
 }) {
+  const { hoverProps, card } = useHoverCard({
+    title: doc.title,
+    path: doc.relPath,
+    meta: [
+      statusLabel(doc.status),
+      formatWords(doc.words),
+      ...(doc.annCount > 0 ? [`${doc.annCount} 条批注`] : []),
+      ...((doc.aiCount ?? 0) > 0 ? [`${doc.aiCount} 条 AI`] : []),
+      formatRelativeTime(doc.mtime),
+    ],
+  });
+
   return (
-    <button className={`list-row ${selected ? 'selected' : ''}`} onClick={onClick}>
+    <>
+      <button
+        className={`list-row ${selected ? 'selected' : ''}`}
+        onClick={onClick}
+        data-flip-key={doc.id}
+        {...hoverProps}
+      >
       <span className={`select-mark ${bulkMode ? 'visible' : ''} ${selected ? 'on' : ''}`}>
         {selected && bulkMode && <Icon name="check" size={11} />}
       </span>
@@ -621,7 +650,9 @@ function ListRow({
       </span>
       <span className="list-words">{formatWords(doc.words)}</span>
       <span className="list-time">{formatRelativeTime(doc.mtime)}</span>
-    </button>
+      </button>
+      {card}
+    </>
   );
 }
 
@@ -641,6 +672,7 @@ function VirtualDocGrid({
   density: 'comfortable' | 'compact';
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ cols: 3, viewport: 800, scrollTop: 0 });
 
   useEffect(() => {
@@ -670,10 +702,17 @@ function VirtualDocGrid({
   const paddingTop = startRow * rowHeight;
   const paddingBottom = Math.max(0, (totalRows - endRow) * rowHeight) + 32;
 
+  // 只有可见区里的卡片参与行动画；滚动本身由 useRowFlip 内部挡掉
+  useRowFlip(
+    gridRef,
+    useMemo(() => slice.map((doc) => doc.id).join(','), [slice]),
+  );
+
   return (
     <div className="shelf-scroll" ref={scrollRef}>
       <div
         className="doc-grid"
+        ref={gridRef}
         style={{
           gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
           gap: `${gap}px`,

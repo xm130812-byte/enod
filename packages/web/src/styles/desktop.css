@@ -1,8 +1,7 @@
 /* ============================================================
-   M2 · 桌面化视觉层
-   参考 MiaoYan 的克制留白与 Mole 的深色氛围：
-   侧栏内嵌收起、工具化图标、细短线、轻微纸感，不再用整屏 1px 边框分割。
-   ============================================================ */
+   M2 路 妗岄潰鍖栬瑙夊眰
+   鍙傝€?MiaoYan 鐨勫厠鍒剁暀鐧戒笌 Mole 鐨勬繁鑹叉皼鍥达細
+   渚ф爮鍐呭祵鏀惰捣銆佸伐鍏峰寲鍥炬爣銆佺粏鐭嚎銆佽交寰焊鎰燂紝涓嶅啀鐢ㄦ暣灞?1px 杈规鍒嗗壊銆?   ============================================================ */
 
 .collapse {
   display: grid;
@@ -21,7 +20,7 @@
   min-height: 0;
 }
 
-/* ------------------------------------------------------------ 一页：侧栏 */
+/* ------------------------------------------------------------ 涓€椤碉細渚ф爮 */
 
 .simple {
   background: var(--bg);
@@ -35,7 +34,7 @@
   border-right: 1px solid var(--line-soft);
   overflow: hidden;
   transition:
-    width var(--dur-slow) var(--ease),
+    width var(--dur-drawer) var(--ease),
     opacity var(--dur) var(--ease);
 }
 .simple-side-inner {
@@ -67,7 +66,7 @@
   overflow: hidden;
   opacity: 0;
   transition:
-    width var(--dur-slow) var(--ease),
+    width var(--dur-drawer) var(--ease),
     opacity var(--dur) var(--ease),
     border-color var(--dur) var(--ease);
 }
@@ -354,7 +353,7 @@
   gap: 6px;
 }
 
-/* ------------------------------------------------------------ 万卷：书架 */
+/* ------------------------------------------------------------ 涓囧嵎锛氫功鏋?*/
 
 .shelf {
   background: var(--bg);
@@ -484,10 +483,10 @@
 .doc-card {
   padding: 14px 16px;
   gap: 7px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-elev);
-  box-shadow: 0 1px 0 rgba(28, 24, 18, 0.025);
+  box-shadow: none;
   transition:
     transform var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease),
@@ -496,7 +495,7 @@
 }
 .doc-card:hover {
   transform: translateY(-1px);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   background: var(--bg-elev);
   box-shadow: var(--shadow-sm);
 }
@@ -616,7 +615,7 @@
   background: var(--bg-soft);
 }
 
-/* ------------------------------------------------------------ 万卷：文件夹 */
+/* ------------------------------------------------------------ 涓囧嵎锛氭枃浠跺す */
 
 .folder-pane {
   width: 220px;
@@ -695,7 +694,7 @@
   font-size: 9.5px;
 }
 
-/* ------------------------------------------------------------ 阅读器 */
+/* ------------------------------------------------------------ 闃呰鍣?*/
 
 .reader {
   background: var(--bg);
@@ -716,8 +715,7 @@
   border-bottom: 1px solid var(--line-soft);
   background: color-mix(in oklab, var(--bg) 92%, var(--bg-side));
 }
-/* 顶栏操作组靠左：DOM 仍是「返回 → 标题 → 操作」，视觉上是「返回 → 操作 → 标题」。
-   标题不参与 Tab 顺序，所以视觉与键盘顺序一致。 */
+/* 椤舵爮鎿嶄綔缁勯潬宸︼細DOM 浠嶆槸銆岃繑鍥?鈫?鏍囬 鈫?鎿嶄綔銆嶏紝瑙嗚涓婃槸銆岃繑鍥?鈫?鎿嶄綔 鈫?鏍囬銆嶃€?   鏍囬涓嶅弬涓?Tab 椤哄簭锛屾墍浠ヨ瑙変笌閿洏椤哄簭涓€鑷淬€?*/
 .reader-actions {
   order: 1;
 }
@@ -820,7 +818,7 @@
   background: var(--bg-side);
   overflow: hidden;
   transition:
-    width var(--dur-slow) var(--ease),
+    width var(--dur-drawer) var(--ease),
     padding var(--dur-slow) var(--ease),
     opacity var(--dur) var(--ease),
     border-color var(--dur) var(--ease);
@@ -843,7 +841,7 @@
   border-right-width: 0;
   opacity: 0;
 }
-/* 覆盖 app.css 的 display:none，让专注模式是“收窄”而不是瞬间消失 */
+/* 瑕嗙洊 app.css 鐨?display:none锛岃涓撴敞妯″紡鏄€滄敹绐勨€濊€屼笉鏄灛闂存秷澶?*/
 .reader.focus-mode .toc {
   display: block;
 }
@@ -925,7 +923,7 @@
   animation: content-in 300ms var(--ease-out);
 }
 .article-foot {
-  /* 与 .article 同一个 ch 基准，页脚才会和正文左右对齐 */
+  /* 涓?.article 鍚屼竴涓?ch 鍩哄噯锛岄〉鑴氭墠浼氬拰姝ｆ枃宸﹀彸瀵归綈 */
   max-width: var(--reader-measure);
   margin: 46px auto 0;
   padding-top: 13px;
@@ -951,7 +949,7 @@
   border-left: 1px solid var(--line-soft);
   overflow: hidden;
   transition:
-    width var(--dur-slow) var(--ease),
+    width var(--dur-drawer) var(--ease),
     opacity var(--dur) var(--ease),
     border-color var(--dur) var(--ease);
 }
@@ -1137,7 +1135,7 @@
   color: var(--fg);
 }
 
-/* ------------------------------------------------------------ 浮层 */
+/* ------------------------------------------------------------ 娴眰 */
 
 .menu {
   min-width: 190px;
@@ -1370,7 +1368,7 @@
 .toolbar-btn {
   border-radius: 5px;
 }
-/* 选区工具条上的 AI 分组：跟颜色点、批注按钮区分开 */
+/* 閫夊尯宸ュ叿鏉′笂鐨?AI 鍒嗙粍锛氳窡棰滆壊鐐广€佹壒娉ㄦ寜閽尯鍒嗗紑 */
 .toolbar-label {
   display: inline-flex;
   align-items: center;
@@ -1397,7 +1395,7 @@
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* ------------------------------------------------------------ 剪藏 */
+/* ------------------------------------------------------------ 鍓棌 */
 
 .clip-hint {
   margin: 2px 0 0;
@@ -1568,15 +1566,15 @@
   font-size: 11px;
 }
 
-/* ------------------------------------------------------------ 动效 */
+/* ------------------------------------------------------------ 鍔ㄦ晥 */
 
-/* 一页 ⇄ 万卷：新视图轻微「推近」再落定，避免硬切；从 1.012 起步所以不会露出底色缝隙 */
+/* 涓€椤?鈬?涓囧嵎锛氭柊瑙嗗浘杞诲井銆屾帹杩戙€嶅啀钀藉畾锛岄伩鍏嶇‖鍒囷紱浠?1.012 璧锋鎵€浠ヤ笉浼氶湶鍑哄簳鑹茬紳闅?*/
 .app[data-swap='active'] > .simple,
 .app[data-swap='active'] > .shelf,
 .app[data-swap='active'] > .reader {
   animation: view-swap 260ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
-/* 切换结束后关掉子视图自带的 view-in，免得属性一撤又重新播一次 */
+/* 鍒囨崲缁撴潫鍚庡叧鎺夊瓙瑙嗗浘鑷甫鐨?view-in锛屽厤寰楀睘鎬т竴鎾ゅ張閲嶆柊鎾竴娆?*/
 .app[data-swap='idle'] > .simple,
 .app[data-swap='idle'] > .shelf,
 .app[data-swap='idle'] > .reader {
@@ -1883,7 +1881,7 @@ body.col-resizing .panel-handle {
   overflow: hidden;
   animation: ann-card-in 0.12s var(--ease-out);
 }
-/* 钉住的卡片和悬浮卡一样按视口坐标摆放，只是不随滚动消失 */
+/* 閽変綇鐨勫崱鐗囧拰鎮诞鍗′竴鏍锋寜瑙嗗彛鍧愭爣鎽嗘斁锛屽彧鏄笉闅忔粴鍔ㄦ秷澶?*/
 .ann-card.pinned {
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
 }
@@ -1934,7 +1932,7 @@ body.col-resizing .panel-handle {
   background: var(--accent-soft);
 }
 
-/* 正文区：长备注在这里滚动，高度由浮框高度决定 */
+/* 姝ｆ枃鍖猴細闀垮娉ㄥ湪杩欓噷婊氬姩锛岄珮搴︾敱娴楂樺害鍐冲畾 */
 .ann-card-body {
   flex: 1;
   min-height: 0;
@@ -1971,7 +1969,7 @@ body.col-resizing .panel-handle {
   font-size: 11.5px;
 }
 
-/* 右下角拖拽改大小 */
+/* 鍙充笅瑙掓嫋鎷芥敼澶у皬 */
 .ann-card-resize {  position: absolute;
   right: 2px;
   bottom: 2px;

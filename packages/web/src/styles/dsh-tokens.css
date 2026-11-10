@@ -1,0 +1,154 @@
+/* ============================================================
+   dsh-tokens.css · DeepSeek Harness 的设计语言
+   ------------------------------------------------------------
+   原料取自 DSH 的 token 层（@deepseek-ai/dsh-client-ui-theme）：
+   · 中性色是 bluish 系（#f9fafb / #ebeef2 / #61666b …），不是纯灰，
+     所以整块界面偏冷一点点，这是"DSH 味"的主要来源；
+   · 描边分四档 10% / 10% / 12% / 16% 透明度，层次靠描边而不是投影；
+   · 阴影三级，扩散大、浓度低；
+   · 动效一条曲线 cubic-bezier(.4,0,.2,1)，时长 100/200/300ms；
+   · 圆角 4/8/12/16/20/28。
+
+   这张表只放"原料"，enod 自己的语义变量（--bg / --fg / --line …）
+   在 app.css 里映射过来。要跟 DSH 升级，只改这里。
+   ============================================================ */
+
+:root {
+  /* ---------------- 中性色阶梯 ---------------- */
+  --dsw-n-00: #ffffff;
+  --dsw-n-50: #f9fafb;
+  --dsw-n-75: #f1f3f5;
+  --dsw-n-90: #edf0f4;
+  --dsw-n-100: #ebeef2;
+  --dsw-n-150: #e9ecf2;
+  --dsw-n-200: #e1e5ee;
+  --dsw-n-300: #cfd3d6;
+  --dsw-n-400: #adb2b8;
+  --dsw-n-500: #979da6;
+  --dsw-n-600: #81858c;
+  --dsw-n-700: #61666b;
+  --dsw-n-750: #43454a;
+  --dsw-n-800: #353638;
+  --dsw-n-850: #2c2c2e;
+  --dsw-n-875: #232324;
+  --dsw-n-900: #1b1b1c;
+  --dsw-n-950: #151517;
+  --dsw-n-1000: #0f1115;
+
+  /* ---------------- 品牌色阶 ---------------- */
+  --dsw-blue-50: #eff6ff;
+  --dsw-blue-75: #e5f0ff;
+  --dsw-blue-100: #dbeafe;
+  --dsw-blue-300: #93c5fd;
+  --dsw-blue-400: #60a5fa;
+  --dsw-blue-500: #3b82f6;
+  --dsw-blue-600: #2563eb;
+  --dsw-deepseek-50: #edf3fe;
+  --dsw-deepseek-100: #e4edfd;
+  --dsw-deepseek-300: #b7c8fe;
+  --dsw-deepseek-400: #7aaaff;
+  --dsw-deepseek-450: #5686fe;
+  --dsw-deepseek-500: #4176e6;
+  --dsw-deepseek-600: #4868b2;
+  --dsw-deepseek-800: #34415b;
+  --dsw-deepseek-900: #283142;
+
+  /* ---------------- 语义色阶 ---------------- */
+  --dsw-red-50: #fef2f2;
+  --dsw-red-100: #fee2e2;
+  --dsw-red-400: #f25a5a;
+  --dsw-red-500: #ef4444;
+  --dsw-red-600: #ec1313;
+  --dsw-green-100: #e6faed;
+  --dsw-green-400: #4ed17e;
+  --dsw-green-500: #22c55e;
+  --dsw-amber-100: #fef5e7;
+  --dsw-amber-400: #f7ad31;
+  --dsw-amber-500: #f59e0b;
+  --dsw-violet-400: #a78bfa;
+
+  /* ---------------- 圆角 ---------------- */
+  --dsw-r-xs: 4px;
+  --dsw-r-sm: 8px;
+  --dsw-r-md: 12px;
+  --dsw-r-lg: 16px;
+  --dsw-r-xl: 20px;
+  --dsw-r-panel: 28px;
+
+  /* ---------------- 动效 ---------------- */
+  --dsw-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dsw-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --dsw-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dsw-dur-fast: 100ms;
+  --dsw-dur: 200ms;
+  --dsw-dur-slow: 300ms;
+
+  /* ---------------- 阴影（越靠前越"贴地"） ---------------- */
+  --dsw-shadow-1: 0 2px 4px 0 rgb(0 0 0 / 0.05);
+  --dsw-shadow-2: 0 4px 12px 0 rgb(0 0 0 / 0.02), 0 2px 8px 0 rgb(0 0 0 / 0.04);
+  --dsw-shadow-3: 0 0 1px 0 rgb(0 0 0 / 0.2), 0 0 4px 0 rgb(0 0 0 / 0.02), 0 12px 32px 0 rgb(0 0 0 / 0.08);
+
+  /* ---------------- 描边 ---------------- */
+  --dsw-line-1: rgb(0 0 0 / 0.04);
+  --dsw-line-2: rgb(0 0 0 / 0.1);
+  --dsw-line-3: rgb(0 0 0 / 0.12);
+  --dsw-line-4: rgb(0 0 0 / 0.16);
+
+  /* ---------------- 亮色语义 ---------------- */
+  --dsw-bg-base: var(--dsw-n-50);
+  --dsw-bg-raised: var(--dsw-n-00);
+  --dsw-bg-sunken: #f5f7fa;
+  --dsw-bg-soft: var(--dsw-n-75);
+  --dsw-bg-hover: var(--dsw-n-100);
+  --dsw-bg-active: var(--dsw-n-200);
+  --dsw-bg-selected: var(--dsw-blue-75);
+
+  --dsw-label-1: var(--dsw-n-1000);
+  --dsw-label-2: var(--dsw-n-700);
+  --dsw-label-3: var(--dsw-n-600);
+
+  --dsw-brand-fill: var(--dsw-n-1000);
+  --dsw-brand-hover: var(--dsw-n-750);
+  --dsw-brand-fg: var(--dsw-n-00);
+
+  --dsw-accent: var(--dsw-deepseek-500);
+  --dsw-accent-hover: #3a68d8;
+  --dsw-accent-soft: var(--dsw-deepseek-50);
+  --dsw-danger: var(--dsw-red-600);
+  --dsw-scrim: rgb(15 17 21 / 0.36);
+}
+
+/* 深色：底色走 near-black（#151517），卡片逐层提亮 875 → 850 */
+:root[data-theme='dark'] {
+  --dsw-bg-base: var(--dsw-n-950);
+  --dsw-bg-raised: var(--dsw-n-875);
+  --dsw-bg-sunken: #111113;
+  --dsw-bg-soft: var(--dsw-n-900);
+  --dsw-bg-hover: var(--dsw-n-850);
+  --dsw-bg-active: var(--dsw-n-800);
+  --dsw-bg-selected: rgb(65 118 230 / 0.22);
+
+  --dsw-label-1: var(--dsw-n-50);
+  --dsw-label-2: var(--dsw-n-300);
+  --dsw-label-3: var(--dsw-n-400);
+
+  /* 深色下主按钮反过来是白的 */
+  --dsw-brand-fill: var(--dsw-n-50);
+  --dsw-brand-hover: var(--dsw-n-300);
+  --dsw-brand-fg: var(--dsw-n-1000);
+
+  --dsw-accent: var(--dsw-deepseek-400);
+  --dsw-accent-hover: var(--dsw-deepseek-450);
+  --dsw-accent-soft: rgb(122 170 255 / 0.16);
+  --dsw-danger: var(--dsw-red-400);
+  --dsw-scrim: rgb(0 0 0 / 0.62);
+
+  --dsw-shadow-1: 0 2px 4px 0 rgb(0 0 0 / 0.4);
+  --dsw-shadow-2: 0 4px 12px 0 rgb(0 0 0 / 0.3), 0 2px 8px 0 rgb(0 0 0 / 0.24);
+  --dsw-shadow-3: 0 0 1px 0 rgb(0 0 0 / 0.6), 0 0 4px 0 rgb(0 0 0 / 0.2), 0 12px 32px 0 rgb(0 0 0 / 0.55);
+
+  --dsw-line-1: rgb(255 255 255 / 0.04);
+  --dsw-line-2: rgb(255 255 255 / 0.08);
+  --dsw-line-3: rgb(255 255 255 / 0.12);
+  --dsw-line-4: rgb(255 255 255 / 0.16);
+}
