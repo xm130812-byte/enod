@@ -936,6 +936,17 @@ export function ReaderPage({
   const orphanList = useMemo(() => annotationList.filter((a) => orphans.includes(a.id)), [annotationList, orphans]);
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
 
+  // 标题跟着当前文档走：被嵌进宿主时，面板状态栏靠它显示「在读哪一篇」
+  useEffect(() => {
+    const title = doc?.title;
+    if (!title) return undefined;
+    const previous = document.title;
+    document.title = `${title} · enod`;
+    return () => {
+      document.title = previous;
+    };
+  }, [doc?.title]);
+
   // 选区工具条按下「问…」：面板已切到 AI tab，焦点随后落进提问框
   useEffect(() => {
     if (askFocus === 0) return undefined;
