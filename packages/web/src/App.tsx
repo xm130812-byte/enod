@@ -128,9 +128,19 @@ function useEmbedBridge(): void {
         headers: { 'content-type': 'application/json', 'x-reader-client': '1' },
         body: JSON.stringify({ href: window.location.href, title: document.title }),
         keepalive: true,
-      }).catch(() => {
-        /* 内核没起或正在重启，下一次心跳再试 */
-      });
+      })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = (await response.json().catch(() => null)) as { open?: unknown } | null;
+          const target = data && typeof data.open === 'string' ? data.open : '';
+          // 宿主让跳哪篇就跳哪篇：心跳顺带把指令带回来，不用第二条通道
+          if (target && target.startsWith(origin) && target !== window.location.href) {
+            window.location.href = target;
+          }
+        })
+        .catch(() => {
+          /* 内核没起或正在重启，下一次心跳再试 */
+        });
     };
     report();
     const heartbeat = window.setInterval(report, 5000);

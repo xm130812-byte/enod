@@ -770,6 +770,7 @@ fn epoch_ms() -> i64 {
 }
 
 /// 内嵌页面报到：自己在读哪一篇。字段长度都截断，不让人灌爆内存。
+/// 顺着响应把「请跳到这一篇」带回去——宿主要切文档时不用另开一条通道。
 pub async fn embed_beacon(Json(body): Json<Value>) -> AppResult<Response> {
     let href = body.get("href").and_then(|v| v.as_str()).unwrap_or("");
     if !href.starts_with("http://127.0.0.1:") && !href.starts_with("http://localhost:") {
@@ -789,7 +790,30 @@ pub async fn embed_beacon(Json(body): Json<Value>) -> AppResult<Response> {
         state.href = href.chars().take(2048).collect();
         state.title = title;
     }
+    let pending = {
+        let mut open = embed_open_slot().lock().unwrap_or_else(|p| p.into_inner());
+        open.take()
+    };
+    json_ok(json!({ "ok": true, "open": pending }))
+}
+
+/// 宿主让内嵌页面跳到某篇。只接受本机地址，且只保留最近一次。
+pub async fn embed_open(body: String) -> AppResult<Response> {
+    let href = body.trim();
+    if !href.starts_with("http://127.0.0.1:") && !href.starts_with("http://localhost:") {
+        return Err(AppError::new(400, "bad-href", "href 必须是本机地址"));
+    }
+    {
+        let mut open = embed_open_slot().lock().unwrap_or_else(|p| p.into_inner());
+        *open = Some(href.chars().take(2048).collect());
+    }
     json_ok(json!({ "ok": true }))
+}
+
+fn embed_open_slot() -> &'static std::sync::Mutex<Option<String>> {
+    static PENDING: std::sync::OnceLock<std::sync::Mutex<Option<String>>> =
+        std::sync::OnceLock::new();
+    PENDING.get_or_init(|| std::sync::Mutex::new(None))
 }
 
 /// 宿主轮询这一条。只读、无凭据，所以对本机任意端口来源开放。

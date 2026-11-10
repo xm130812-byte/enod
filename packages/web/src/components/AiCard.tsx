@@ -22,6 +22,8 @@ interface AiCardProps {
   onJump: () => void;
   onDelete: () => void;
   onRerun: () => void;
+  /** 把这条 AI 产出写成这一段的批注（有同锚点的批注就追加）。 */
+  onToNote?: () => void;
   resolveWiki?: (target: string, anchor?: string) => { href: string } | null;
   onNavigateWiki?: (href: string, anchor: string | null) => void;
 }
@@ -30,7 +32,16 @@ interface AiCardProps {
  * 侧栏里的一条 AI 产出。正文按 Markdown 渲染（模型给的结构不该白写），
  * 但走的是 AI 专用的净化 + 卡片排版，不套正文那套（无图片、无 Shiki）。
  */
-export function AiCard({ entry, focused = false, onJump, onDelete, onRerun, resolveWiki, onNavigateWiki }: AiCardProps) {
+export function AiCard({
+  entry,
+  focused = false,
+  onJump,
+  onDelete,
+  onRerun,
+  onToNote,
+  resolveWiki,
+  onNavigateWiki,
+}: AiCardProps) {
   const label = kindLabel(entry.kind);
   const when = entry.created ? entry.created.slice(0, 16).replace('T', ' ') : '';
   return (
@@ -66,6 +77,11 @@ export function AiCard({ entry, focused = false, onJump, onDelete, onRerun, reso
         <button className="btn btn-ghost tiny" onClick={onRerun} title="用同样的锚点再跑一次">
           重跑
         </button>
+        {onToNote && entry.exact ? (
+          <button className="btn btn-ghost tiny" onClick={onToNote} title="把这段分析写成这一段的批注">
+            <Icon name="note" size={12} /> 记到批注
+          </button>
+        ) : null}
         <button className="btn btn-ghost tiny danger" onClick={onDelete}>
           删除
         </button>

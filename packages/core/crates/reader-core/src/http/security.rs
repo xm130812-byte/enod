@@ -123,7 +123,10 @@ fn check(state: &AppState, req: &Request) -> Result<(), AppError> {
     if req.method() == axum::http::Method::OPTIONS {
         return Err(AppError::new(403, "preflight-denied", "不接受跨源预检"));
     }
-    if req.method() != axum::http::Method::GET && req.method() != axum::http::Method::HEAD {
+    // 内嵌接口只用于本机面板，跨源 POST 走不了自定义头（会触发预检），
+    // 所以这两条校验对它豁免；它本身只接受本机 href、只存内存。
+    let embed = req.uri().path().starts_with("/api/v1/embed");
+    if req.method() != axum::http::Method::GET && req.method() != axum::http::Method::HEAD && !embed {
         if headers
             .get("x-reader-client")
             .and_then(|v| v.to_str().ok())

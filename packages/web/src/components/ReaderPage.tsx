@@ -655,6 +655,52 @@ export function ReaderPage({
     }
   };
 
+  /**
+   * 把一条 AI 产出写成这一段的批注。
+   * 同一段已经有批注就追加（保留你原来的旁注），没有就新建一条黄高亮。
+   */
+  const aiToNote = async (entry: AiEntry): Promise<void> => {
+    const current = docRef.current;
+    if (!current) return;
+    const text = entry.output?.trim();
+    if (!text) {
+      toast('这条还没有内容', 'error');
+      return;
+    }
+    const block = `✦ ${kindLabel(entry.kind)}（AI）\n${text}`;
+    const same = entry.exact ? current.annotations.find((a) => a.exact === entry.exact) : undefined;
+    try {
+      if (same) {
+        const note = same.note.trim() ? `${same.note.trim()}\n\n---\n${block}` : block;
+        const res = await api.updateAnnotation(current.id, same.id, { note });
+        updateDoc((d) => ({
+          ...d,
+          annotations: d.annotations.map((a) => (a.id === same.id ? res.annotation : a)),
+        }));
+        toast('已追加到这段的批注', 'success');
+      } else {
+        const res = await api.addAnnotation(current.id, {
+          exact: entry.exact,
+          prefix: entry.prefix,
+          suffix: entry.suffix,
+          pos: entry.pos,
+          color: 'yellow',
+          note: block,
+        });
+        updateDoc((d) => ({
+          ...d,
+          annotations: [...d.annotations, res.annotation],
+          annCount: d.annCount + 1,
+        }));
+        toast('已写成这段的批注', 'success');
+      }
+      setPanelOpen(true);
+      setPanelTab('notes');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '写回批注失败', 'error');
+    }
+  };
+
   const jumpToAi = (entry: AiEntry): void => {
     if (!entry.exact.trim()) {
       toast('这条是整篇概括，正文里没有对应锚点', 'info');
@@ -1552,6 +1598,7 @@ export function ReaderPage({
                       onNavigateWiki={handleWikiNavigate}
                       onJump={() => jumpToAi(entry)}
                       onDelete={() => void deleteAi(entry)}
+                      onToNote={() => void aiToNote(entry)}
                       onRerun={() =>
                         void enqueueAi(entry.kind as AiKind, {
                           exact: entry.exact,
