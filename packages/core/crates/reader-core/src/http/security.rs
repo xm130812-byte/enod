@@ -19,8 +19,12 @@ pub fn allowed_origins(port: u16) -> HashSet<String> {
     .collect()
 }
 
-/// 本机来源（任意端口）——只给内嵌状态这类只读接口用。
-fn is_loopback_origin(origin: &str) -> bool {
+/// 内嵌宿主的来源：本机任意端口，或 DSH 桌面壳的自定义 scheme（`dsh-app://app`）。
+/// 只给 /api/v1/embed 这类只读接口用。
+fn is_embed_origin(origin: &str) -> bool {
+    if origin.starts_with("dsh-app://") {
+        return true;
+    }
     let rest = match origin.strip_prefix("http://") {
         Some(rest) => rest,
         None => return false,
@@ -106,9 +110,9 @@ fn check(state: &AppState, req: &Request) -> Result<(), AppError> {
     }
     if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
         let origin = origin.to_str().unwrap_or("");
-        // 内嵌面板与内核不同端口，但同在本机：只对 /api/v1/embed 放行任意本机端口
+        // 内嵌面板和内核不同源（可能是 DSH 桌面壳的 dsh-app://app），只对 /api/v1/embed 放行
         let embed = req.uri().path().starts_with("/api/v1/embed");
-        if !(embed && is_loopback_origin(origin)) && !allowed_origins(state.port).contains(origin) {
+        if !(embed && is_embed_origin(origin)) && !allowed_origins(state.port).contains(origin) {
             return Err(AppError::new(
                 403,
                 "bad-origin",
