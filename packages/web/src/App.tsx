@@ -65,6 +65,47 @@ function useTheme(config: AppConfig | null): void {
   }, [config]);
 }
 
+/**
+ * 被宿主页面（DSH 右栏）嵌进来时的桥。
+ *
+ * 只认 `?embed=1` 的页面，且只回给宿主：报当前在哪一篇，接宿主给的「跳到这一篇」。
+ * 出去的消息带 `source: 'enod'`，进来的必须是 `source: 'dsh'` 且指向本站。
+ */
+function useEmbedBridge(): void {
+  useEffect(() => {
+    if (window.parent === window) return;
+    if (new URLSearchParams(window.location.search).get('embed') !== '1') return;
+
+    const origin = window.location.origin;
+    const post = (message: Record<string, unknown>) => {
+      try {
+        window.parent.postMessage({ source: 'enod', ...message }, '*');
+      } catch {
+        /* 宿主已经关了 */
+      }
+    };
+
+    post({ type: 'enod:ready', href: window.location.href });
+
+    const onHash = () => post({ type: 'enod:navigate', href: window.location.href });
+    window.addEventListener('hashchange', onHash);
+
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { source?: string; type?: string; href?: string } | null;
+      if (!data || data.source !== 'dsh' || data.type !== 'enod:open') return;
+      if (typeof data.href !== 'string' || !data.href.startsWith(origin)) return;
+      if (window.location.href === data.href) return;
+      window.location.href = data.href;
+    };
+    window.addEventListener('message', onMessage);
+
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('message', onMessage);
+    };
+  }, []);
+}
+
 function Shell() {
   const { info, config, loading, error, refresh } = useLibrary();
   const { toast } = useToast();
@@ -102,6 +143,11 @@ function Shell() {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
     if (view === 'simple' || view === 'complex') switchMode(view);
+    // 被 DSH 右栏嵌进来时（?embed=1）：去掉品牌栏，默认进阅读器
+    if (params.get('embed') === '1') {
+      document.documentElement.dataset.embed = '1';
+      switchMode('complex');
+    }
     if (params.get('focus') === 'search') setSearchOpen(true);
     if (params.get('settings') === '1') setSettingsOpen(true);
     if (params.get('new') === '1') setNewDocOpen(true);
@@ -119,6 +165,7 @@ function Shell() {
   }, [swap]);
 
   useTheme(config);
+  useEmbedBridge();
 
   const openDoc = useCallback((id: string) => {
     if (window.location.hash === `#/doc/${id}`) return;

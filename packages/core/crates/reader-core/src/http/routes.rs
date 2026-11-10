@@ -629,7 +629,8 @@ fn to_sse_event(ev: &crate::http::sse::ServerEvent) -> axum::response::sse::Even
 
 /* ------------------------------------------------------------------ static */
 
-const CSP: &str = "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+// 允许被本机页面（DSH 右栏的 enod 面板）内嵌，但不允许任何外部站点
+const CSP: &str = "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self' http://127.0.0.1:* http://localhost:*";
 
 fn mime_of(path: &std::path::Path) -> &'static str {
     let ext = path
