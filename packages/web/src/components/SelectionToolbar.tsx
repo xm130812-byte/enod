@@ -22,9 +22,11 @@ interface SelectionToolbarProps {
   onColor: (color: AnnotationColor, withNote?: boolean) => void;
   onCopy: () => void;
   onAi?: (kind: AiKind) => void;
+  /** 就这段提一个自己的问题（走 AI 队列，答案写回这段旁边）。 */
+  onAsk?: () => void;
 }
 
-export function SelectionToolbar({ info, onColor, onCopy, onAi }: SelectionToolbarProps) {
+export function SelectionToolbar({ info, onColor, onCopy, onAi, onAsk }: SelectionToolbarProps) {
   const width = 470;
   const bottom = info.rect.top + info.rect.height;
   const left = Math.min(Math.max(info.rect.left + info.rect.width / 2, width / 2 + 12), window.innerWidth - width / 2 - 12);
@@ -71,6 +73,11 @@ export function SelectionToolbar({ info, onColor, onCopy, onAi }: SelectionToolb
               {action.label}
             </button>
           ))}
+          {onAsk && (
+            <button className="toolbar-btn ai" title="就这段提自己的问题" onClick={onAsk}>
+              问…
+            </button>
+          )}
         </>
       )}
     </div>

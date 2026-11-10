@@ -142,6 +142,9 @@ export function ReaderPage({
   const [focusAiId, setFocusAiId] = useState<string | null>(null);
   /** AI tab 里的自由提问输入 */
   const [aiQuestion, setAiQuestion] = useState('');
+  /** 选区工具条按下「问…」时递增，用来把焦点送到提问框。 */
+  const [askFocus, setAskFocus] = useState(0);
+  const askInputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -933,6 +936,13 @@ export function ReaderPage({
   const orphanList = useMemo(() => annotationList.filter((a) => orphans.includes(a.id)), [annotationList, orphans]);
   const healthyList = useMemo(() => annotationList.filter((a) => !orphans.includes(a.id)), [annotationList, orphans]);
 
+  // 选区工具条按下「问…」：面板已切到 AI tab，焦点随后落进提问框
+  useEffect(() => {
+    if (askFocus === 0) return undefined;
+    const timer = window.setTimeout(() => askInputRef.current?.focus(), 60);
+    return () => window.clearTimeout(timer);
+  }, [askFocus]);
+
   // 批注 / AI 列表在增删时滑位；切 tab 是整体换内容，不播
   const panelBodyRef = useRef<HTMLDivElement>(null);
   useRowFlip(
@@ -1447,6 +1457,7 @@ export function ReaderPage({
                     <div className="ai-ask">
                       <textarea
                         className="ai-ask-input"
+                        ref={askInputRef}
                         rows={2}
                         placeholder={
                           selection
@@ -1627,6 +1638,11 @@ export function ReaderPage({
           onColor={(color, withNote) => void createAnnotation(color, withNote)}
           onCopy={() => void copyQuote()}
           onAi={(kind) => void enqueueAi(kind)}
+          onAsk={() => {
+            setPanelOpen(true);
+            setPanelTab('ai');
+            setAskFocus((n) => n + 1);
+          }}
         />
       )}
 
