@@ -86,6 +86,8 @@ function useEmbedBridge(): void {
     };
 
     post({ type: 'enod:ready', href: window.location.href });
+    // 宿主那边的监听可能比首帧晚一步，再报一次，代价可以忽略
+    const again = window.setTimeout(() => post({ type: 'enod:ready', href: window.location.href }), 1200);
 
     const onHash = () => post({ type: 'enod:navigate', href: window.location.href });
     window.addEventListener('hashchange', onHash);
@@ -100,6 +102,7 @@ function useEmbedBridge(): void {
     window.addEventListener('message', onMessage);
 
     return () => {
+      window.clearTimeout(again);
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('message', onMessage);
     };
